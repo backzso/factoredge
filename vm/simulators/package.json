@@ -1,0 +1,22 @@
+{
+  "name": "factoredge-simulators",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Production line simulators for the FactorEdge platform",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "start:line2": "node dist/line2-mqtt/index.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "mqtt": "^5.16.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "typescript": "~5.9.3",
+    "vitest": "^5.0.3"
+  }
+}

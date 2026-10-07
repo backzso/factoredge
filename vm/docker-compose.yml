@@ -1,0 +1,25 @@
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    restart: unless-stopped
+
+  line2-sim:
+    build: ./simulators
+    command: ["node", "dist/line2-mqtt/index.js"]
+    depends_on:
+      - mosquitto
+    environment:
+      MQTT_URL: mqtt://mosquitto:1883
+      TOPIC_PREFIX: factory/line2
+      TICK_MS: "1000"
+      STATE_FILE: /data/line2-state.json
+    volumes:
+      - sim-data:/data
+    restart: unless-stopped
+
+volumes:
+  sim-data:
