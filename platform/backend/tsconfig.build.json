@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  // prisma.config.ts and prisma/ sit outside src/; including them would move the output to dist/src/.
+  "exclude": ["node_modules", "test", "dist", "prisma", "prisma.config.ts", "**/*spec.ts"]
+}

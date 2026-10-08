@@ -1,0 +1,95 @@
+// Prisma 7 + CommonJS: the "prisma-client" generator emits TypeScript into src/,
+// so it is compiled together with the app. moduleFormat must be "cjs".
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+// The connection URL comes from prisma.config.ts (CLI) and the driver adapter (runtime).
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  VIEWER
+}
+
+enum Protocol {
+  MODBUS
+  MQTT
+}
+
+enum LineState {
+  RUNNING
+  STOPPED
+  FAULT
+}
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  username     String   @unique
+  passwordHash String   @map("password_hash")
+  role         Role
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  events Event[]
+
+  @@map("users")
+}
+
+model Device {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  protocol  Protocol
+  // Protocol-specific connection settings (Modbus host/port/unit id, MQTT topic, ...).
+  config    Json
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  readings Reading[]
+  events   Event[]
+
+  @@map("devices")
+}
+
+model Reading {
+  deviceId        String    @map("device_id") @db.Uuid
+  // When the value was measured on the line.
+  ts              DateTime  @db.Timestamptz(3)
+  // When the platform received it.
+  receivedAt      DateTime  @default(now()) @map("received_at") @db.Timestamptz(3)
+  // Modbus uint32 counters go up to ~4.29e9, which overflows Postgres integer (~2.1e9).
+  productionCount BigInt    @map("production_count")
+  scrapCount      BigInt    @map("scrap_count")
+  motorTempC      Float     @map("motor_temp_c")
+  motorCurrentA   Float     @map("motor_current_a")
+  state           LineState
+
+  device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  // One reading per device per instant: a re-sent sample is rejected instead of duplicated.
+  // The primary key index also serves "readings of device X over time" queries.
+  @@id([deviceId, ts])
+  @@map("readings")
+}
+
+model Event {
+  id       String   @id @default(uuid()) @db.Uuid
+  ts       DateTime @default(now()) @db.Timestamptz(3)
+  type     String
+  deviceId String?  @map("device_id") @db.Uuid
+  userId   String?  @map("user_id") @db.Uuid
+  message  String
+
+  device Device? @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([ts])
+  @@index([deviceId])
+  @@index([userId])
+  @@map("events")
+}
