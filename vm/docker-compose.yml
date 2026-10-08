@@ -21,5 +21,20 @@ services:
       - sim-data:/data
     restart: unless-stopped
 
+  line1-sim:
+    build: ./simulators
+    command: ["node", "dist/line1-modbus/index.js"]
+    ports:
+      - "5020:5020"
+    environment:
+      PORT: "5020"
+      UNIT_ID: "1"
+      TICK_MS: "1000"
+      SIM_MODE: ${LINE1_SIM_MODE:-auto}
+      STATE_FILE: /data/line1-state.json
+    volumes:
+      - sim-data:/data
+    restart: unless-stopped
+
 volumes:
   sim-data:

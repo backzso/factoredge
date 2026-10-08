@@ -12,6 +12,7 @@
     "node": ">=22"
   },
   "dependencies": {
+    "modbus-serial": "^8.0.25",
     "mqtt": "^5.16.0"
   },
   "devDependencies": {
