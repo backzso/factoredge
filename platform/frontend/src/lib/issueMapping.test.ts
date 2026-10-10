@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ApiError } from '../api/client';
-import { knownFieldPaths } from '../features/devices/deviceForm';
+import { knownFieldPaths, toDeviceFormPath } from '../features/devices/deviceForm';
 import { issuesFromError, issuesFromMessages, mapIssuesToForm, toFormPath } from './issueMapping';
 
 describe('toFormPath', () => {
@@ -13,21 +13,33 @@ describe('toFormPath', () => {
 });
 
 describe('mapIssuesToForm (device form)', () => {
-  const modbus = knownFieldPaths('MODBUS', 5);
+  const modbus = knownFieldPaths('MODBUS');
   const isModbusField = (p: string) => modbus.has(p);
+  // Sent in a non-default order on purpose: rows are found by signal, not by index.
+  const sent = [
+    { signal: 'state' },
+    { signal: 'motorTempC' },
+    { signal: 'productionCount' },
+    { signal: 'scrapCount' },
+    { signal: 'motorCurrentA' },
+  ] as const;
+  const toPath = (p: string) => toDeviceFormPath(p, sent);
 
   it('puts issues under their fields and keeps validation messages as sent', () => {
     const result = mapIssuesToForm(
       [
         { path: 'config.port', message: 'Too big: expected number to be <=65535' },
         { path: 'config.registerMap[1].wordOrder', message: 'wordOrder (ABCD or CDAB) is required for float32' },
+        { path: 'config.registerMap[0].type', message: 'state must be uint16 with scale 1' },
       ],
       isModbusField,
+      toPath,
     );
     expect(result).toEqual({
       fieldErrors: {
         'config.port': 'Too big: expected number to be <=65535',
-        'config.registerMap.1.wordOrder': 'wordOrder (ABCD or CDAB) is required for float32',
+        'config.registerMap.motorTempC.wordOrder': 'wordOrder (ABCD or CDAB) is required for float32',
+        'config.registerMap.state.type': 'state must be uint16 with scale 1',
       },
       formErrors: [],
     });
@@ -37,6 +49,7 @@ describe('mapIssuesToForm (device form)', () => {
     const result = mapIssuesToForm(
       [{ path: 'config.registerMap', message: 'signal "scrapCount" is missing' }],
       isModbusField,
+      toPath,
     );
     expect(result.fieldErrors).toEqual({ 'config.registerMap': 'signal "scrapCount" is missing' });
   });
@@ -59,20 +72,23 @@ describe('mapIssuesToForm (device form)', () => {
       [
         { path: 'config', message: 'Unrecognized key: "pollInteval"' },
         { path: 'config.registerMap[7].offset', message: 'Invalid input' },
+        { path: 'config.registerMap[2].signal', message: 'signal "productionCount" appears more than once' },
         { path: '', message: 'Invalid input' },
       ],
       isModbusField,
+      toPath,
     );
     expect(result.fieldErrors).toEqual({});
     expect(result.formErrors).toEqual([
       'config: Unrecognized key: "pollInteval"',
       'config.registerMap[7].offset: Invalid input',
+      'config.registerMap[2].signal: signal "productionCount" appears more than once',
       'Invalid input',
     ]);
   });
 
   it('does not map Modbus fields on an MQTT form', () => {
-    const mqtt = knownFieldPaths('MQTT', 0);
+    const mqtt = knownFieldPaths('MQTT');
     const result = mapIssuesToForm(
       [
         { path: 'config.brokerUrl', message: 'brokerUrl must be a valid URL starting with mqtt://' },

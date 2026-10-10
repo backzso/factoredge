@@ -46,15 +46,17 @@ export interface MappedIssues {
   formErrors: string[];
 }
 
+/** `toPath` turns a backend path into a form path; forms with a different shape pass their own. */
 export function mapIssuesToForm(
   issues: readonly ValidationIssue[],
   isKnownField: (formPath: string) => boolean,
+  toPath: (path: string) => string = toFormPath,
 ): MappedIssues {
   const fieldErrors: Record<string, string> = {};
   const formErrors: string[] = [];
   for (const issue of issues) {
     const message = translateApiMessage(issue.message);
-    const formPath = toFormPath(issue.path);
+    const formPath = toPath(issue.path);
     if (formPath !== '' && isKnownField(formPath)) {
       const existing = fieldErrors[formPath];
       fieldErrors[formPath] = existing ? `${existing}\n${message}` : message;

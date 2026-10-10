@@ -1,25 +1,24 @@
 import type { DeviceInput } from '../../api/devices';
-import type {
-  Device,
-  DeviceTemplates,
-  FunctionCode,
-  Protocol,
-  RegisterMapEntry,
-  RegisterType,
-  Signal,
-  WordOrder,
+import {
+  type Device,
+  type DeviceTemplates,
+  type FunctionCode,
+  type Protocol,
+  type RegisterMapEntry,
+  type RegisterType,
+  type Signal,
+  SIGNALS,
+  type WordOrder,
 } from '../../api/types';
 
 // Form values mirror the API body ({ name, protocol, enabled, config: {...} }),
-// so backend issue paths ("config.registerMap[3].offset") map onto form paths
-// ("config.registerMap.3.offset") one to one.
+// except the register map: the backend wants each of the five signals exactly
+// once, so the form keeps one fixed row per signal ("config.registerMap.motorTempC.offset")
+// and the API array is built in SIGNALS order on submit.
 
 type NumberField = number | '';
 
 export interface RegisterRow {
-  /** React list key only; never sent. */
-  key: string;
-  signal: Signal;
   fc: `${FunctionCode}`;
   offset: NumberField;
   type: RegisterType;
@@ -34,7 +33,7 @@ export interface ConfigValues {
   unitId: NumberField;
   pollIntervalMs: NumberField;
   timeoutMs: NumberField;
-  registerMap: RegisterRow[];
+  registerMap: Record<Signal, RegisterRow>;
   brokerUrl: string;
   topicPrefix: string;
   staleAfterMs: NumberField;
@@ -49,22 +48,14 @@ export interface DeviceFormValues {
 
 export const MODBUS_FIELDS = ['host', 'port', 'unitId', 'pollIntervalMs', 'timeoutMs'] as const;
 export const MQTT_FIELDS = ['brokerUrl', 'topicPrefix', 'staleAfterMs'] as const;
-export const REGISTER_COLUMNS = ['signal', 'fc', 'offset', 'type', 'wordOrder', 'scale'] as const;
+export const REGISTER_COLUMNS = ['fc', 'offset', 'type', 'wordOrder', 'scale'] as const;
 
 export function is32Bit(type: RegisterType): boolean {
   return type === 'uint32' || type === 'float32';
 }
 
-let rowCounter = 0;
-export function newRowKey(): string {
-  rowCounter += 1;
-  return `row-${rowCounter}`;
-}
-
-export function toRow(entry: RegisterMapEntry): RegisterRow {
+function toRow(entry: RegisterMapEntry): RegisterRow {
   return {
-    key: newRowKey(),
-    signal: entry.signal,
     fc: `${entry.fc}`,
     offset: entry.offset,
     type: entry.type,
@@ -73,16 +64,20 @@ export function toRow(entry: RegisterMapEntry): RegisterRow {
   };
 }
 
-export function emptyRow(): RegisterRow {
-  return {
-    key: newRowKey(),
-    signal: 'productionCount',
-    fc: '4',
-    offset: '',
-    type: 'uint16',
-    wordOrder: null,
-    scale: 1,
-  };
+/**
+ * One row per signal, whatever order the entries come in. A signal the API
+ * did not return gets an empty offset, so the form asks for it instead of
+ * guessing one.
+ */
+export function toRegisterRows(entries: readonly RegisterMapEntry[]): Record<Signal, RegisterRow> {
+  const rows = {} as Record<Signal, RegisterRow>;
+  for (const signal of SIGNALS) {
+    const entry = entries.find((e) => e.signal === signal);
+    rows[signal] = entry
+      ? toRow(entry)
+      : { fc: '4', offset: '', type: 'uint16', wordOrder: null, scale: 1 };
+  }
+  return rows;
 }
 
 /** New device: both protocols pre-filled from /api/devices/templates; host and broker left empty. */
@@ -97,7 +92,7 @@ export function valuesFromTemplates(templates: DeviceTemplates): DeviceFormValue
       unitId: templates.MODBUS.unitId,
       pollIntervalMs: templates.MODBUS.pollIntervalMs,
       timeoutMs: templates.MODBUS.timeoutMs,
-      registerMap: templates.MODBUS.registerMap.map(toRow),
+      registerMap: toRegisterRows(templates.MODBUS.registerMap),
       brokerUrl: '',
       topicPrefix: templates.MQTT.topicPrefix,
       staleAfterMs: templates.MQTT.staleAfterMs,
@@ -111,7 +106,7 @@ const EMPTY_CONFIG: ConfigValues = {
   unitId: '',
   pollIntervalMs: '',
   timeoutMs: '',
-  registerMap: [],
+  registerMap: toRegisterRows([]),
   brokerUrl: '',
   topicPrefix: '',
   staleAfterMs: '',
@@ -123,7 +118,7 @@ export function valuesFromDevice(device: Device): DeviceFormValues {
       ? {
           ...EMPTY_CONFIG,
           ...device.config,
-          registerMap: device.config.registerMap.map(toRow),
+          registerMap: toRegisterRows(device.config.registerMap),
         }
       : { ...EMPTY_CONFIG, ...device.config };
   return {
@@ -164,20 +159,23 @@ export function toDeviceInput(values: DeviceFormValues): DeviceInput {
       unitId: c.unitId as number,
       pollIntervalMs: c.pollIntervalMs as number,
       timeoutMs: c.timeoutMs as number,
-      registerMap: c.registerMap.map((row) => ({
-        signal: row.signal,
-        fc: Number(row.fc) as FunctionCode,
-        offset: row.offset as number,
-        type: row.type,
-        ...(is32Bit(row.type) && row.wordOrder ? { wordOrder: row.wordOrder } : {}),
-        scale: row.scale as number,
-      })),
+      registerMap: SIGNALS.map((signal) => {
+        const row = c.registerMap[signal];
+        return {
+          signal,
+          fc: Number(row.fc) as FunctionCode,
+          offset: row.offset as number,
+          type: row.type,
+          ...(is32Bit(row.type) && row.wordOrder ? { wordOrder: row.wordOrder } : {}),
+          scale: row.scale as number,
+        };
+      }),
     },
   };
 }
 
-/** Form paths that have a place on screen for the given protocol and register rows. */
-export function knownFieldPaths(protocol: Protocol, registerRows: number): Set<string> {
+/** Form paths that have a place on screen for the given protocol. */
+export function knownFieldPaths(protocol: Protocol): Set<string> {
   const paths = new Set<string>(['name', 'enabled', 'protocol']);
   if (protocol === 'MQTT') {
     MQTT_FIELDS.forEach((f) => paths.add(`config.${f}`));
@@ -186,10 +184,25 @@ export function knownFieldPaths(protocol: Protocol, registerRows: number): Set<s
   MODBUS_FIELDS.forEach((f) => paths.add(`config.${f}`));
   // Array-level issues (missing signal, range too wide) are shown above the table.
   paths.add('config.registerMap');
-  for (let i = 0; i < registerRows; i++) {
-    REGISTER_COLUMNS.forEach((col) => paths.add(`config.registerMap.${i}.${col}`));
+  for (const signal of SIGNALS) {
+    REGISTER_COLUMNS.forEach((col) => paths.add(`config.registerMap.${signal}.${col}`));
   }
   return paths;
+}
+
+const REGISTER_ISSUE_PATH = /^config\.registerMap\[(\d+)\](.*)$/;
+
+/**
+ * Backend issue path → form path. Register issues carry the index into the
+ * array that was sent ("config.registerMap[3].offset"); the row is found by
+ * the signal at that index, never by the index itself. Paths that cannot be
+ * resolved come back unchanged and end up in the form-level list.
+ */
+export function toDeviceFormPath(path: string, sent: readonly { signal: Signal }[]): string {
+  const match = REGISTER_ISSUE_PATH.exec(path);
+  if (!match) return path;
+  const signal = sent[Number(match[1])]?.signal;
+  return signal ? `config.registerMap.${signal}${match[2]}` : path;
 }
 
 const REQUIRED = 'Gerekli';
@@ -208,13 +221,14 @@ export function validateDeviceForm(values: DeviceFormValues): Record<string, str
     requireNumber('config.unitId', c.unitId);
     requireNumber('config.pollIntervalMs', c.pollIntervalMs);
     requireNumber('config.timeoutMs', c.timeoutMs);
-    c.registerMap.forEach((row, i) => {
-      requireNumber(`config.registerMap.${i}.offset`, row.offset);
-      requireNumber(`config.registerMap.${i}.scale`, row.scale);
+    for (const signal of SIGNALS) {
+      const row = c.registerMap[signal];
+      requireNumber(`config.registerMap.${signal}.offset`, row.offset);
+      requireNumber(`config.registerMap.${signal}.scale`, row.scale);
       if (is32Bit(row.type) && !row.wordOrder) {
-        errors[`config.registerMap.${i}.wordOrder`] = '32 bit tiplerde gerekli';
+        errors[`config.registerMap.${signal}.wordOrder`] = '32 bit tiplerde gerekli';
       }
-    });
+    }
   } else {
     if (!c.brokerUrl.trim()) errors['config.brokerUrl'] = 'Broker adresi gerekli';
     if (!c.topicPrefix.trim()) errors['config.topicPrefix'] = 'Topic öneki gerekli';

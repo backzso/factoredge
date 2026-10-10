@@ -2,7 +2,6 @@ import type {
   HealthStatus,
   LineState,
   Protocol,
-  RegisterType,
   Role,
   Signal,
 } from '../api/types';
@@ -62,9 +61,11 @@ export const SIGNAL_ORDER: Signal[] = [
   'state',
 ];
 
-export const REGISTER_TYPE_LABEL: Record<RegisterType, string> = {
-  uint16: 'uint16',
-  int16: 'int16',
-  uint32: 'uint32 (2 register)',
-  float32: 'float32 (2 register)',
+/** Rows of the register map in the device form, with a short unit note. */
+export const REGISTER_SIGNAL: Record<Signal, { label: string; unit: string }> = {
+  productionCount: { label: 'Üretim adedi', unit: 'adet' },
+  motorTempC: { label: 'Motor sıcaklığı', unit: '°C' },
+  motorCurrentA: { label: 'Motor akımı', unit: 'A' },
+  scrapCount: { label: 'Fire adedi', unit: 'adet' },
+  state: { label: 'Bant durumu', unit: '0 durdu · 1 çalışıyor · 2 arıza' },
 };
