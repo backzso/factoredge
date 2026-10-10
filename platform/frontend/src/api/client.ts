@@ -19,6 +19,17 @@ export function isApiError(error: unknown): error is ApiError {
   return error instanceof ApiError;
 }
 
+const UNAVAILABLE_STATUSES = new Set([502, 503, 504]);
+
+/**
+ * The backend could not be reached: network failure (status 0), or a gateway
+ * answering for it (502/503/504, e.g. the dev proxy while the backend is down).
+ * This says nothing about the session and must never log the user out.
+ */
+export function isServerUnavailable(error: unknown): boolean {
+  return isApiError(error) && (error.status === 0 || UNAVAILABLE_STATUSES.has(error.status));
+}
+
 let onUnauthorized: () => void = () => {};
 
 /** Called on any 401 except the ones a request opted out of (login, me). */

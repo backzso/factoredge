@@ -1,4 +1,4 @@
-import { ApiError, isApiError } from './client';
+import { ApiError, isApiError, isServerUnavailable } from './client';
 
 // Only business-rule messages are translated. Validation messages (zod,
 // class-validator) are shown as the backend sends them, under a Turkish title.
@@ -31,7 +31,9 @@ export function translateApiMessage(message: string): string {
 }
 
 export function errorTitle(status: number): string {
-  if (status === 0) return 'Sunucuya ulaşılamadı';
+  if (status === 0 || status === 502 || status === 503 || status === 504) {
+    return 'Sunucuya ulaşılamadı';
+  }
   if (status === 400) return 'Geçersiz istek';
   if (status === 401) return 'Oturum gerekli';
   if (status === 403) return 'Yetkiniz yok';
@@ -57,7 +59,7 @@ export function describeError(error: unknown): ErrorDescription {
 }
 
 function describeApiMessage(error: ApiError): string {
-  if (error.status === 0) {
+  if (isServerUnavailable(error)) {
     return 'Ağ bağlantısını ve sunucunun çalıştığını kontrol edin.';
   }
   if (error.messages && error.messages.length > 0) {

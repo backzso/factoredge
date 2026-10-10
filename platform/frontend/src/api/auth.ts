@@ -1,16 +1,41 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, ApiError } from './client';
+import { backoffDelay } from '../lib/backoff';
+import { api, ApiError, isServerUnavailable } from './client';
 import { qk } from './queryKeys';
 import type { AuthUser } from './types';
 
-/** The logged-in user, or null without a session. */
+/**
+ * The logged-in user, or null without a session (401).
+ *
+ * An unreachable backend (network error, 502/503/504) is retried for as long as
+ * it takes, with growing delays. The query stays pending meanwhile, so
+ * RequireAuth neither ends the session nor redirects to the login page, and the
+ * app continues where it was once the backend answers.
+ */
 export function useMe() {
   return useQuery({
     queryKey: qk.me,
     queryFn: fetchMe,
-    retry: false,
+    retry: (_failureCount, error) => isServerUnavailable(error),
+    retryDelay: (failureCount) => backoffDelay(failureCount),
+    // Also try while the browser reports offline: the failure is what shows
+    // the "server unreachable" screen (a paused query would spin forever).
+    networkMode: 'always',
     staleTime: Infinity,
   });
+}
+
+/**
+ * Retries ['me'] immediately. A plain refetch() does nothing while a retry is
+ * waiting (TanStack Query only continues the running retryer when there is no
+ * data yet), so the waiting retry is cancelled first.
+ */
+export function useRetryMeNow(): () => Promise<void> {
+  const queryClient = useQueryClient();
+  return async () => {
+    await queryClient.cancelQueries({ queryKey: qk.me });
+    await queryClient.refetchQueries({ queryKey: qk.me });
+  };
 }
 
 async function fetchMe(): Promise<AuthUser | null> {

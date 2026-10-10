@@ -3,6 +3,7 @@ import type { Device, ReadingDto } from '../../api/types';
 import { HealthBadge, LineStateBadge, ProtocolBadge } from '../../components/badges';
 import { RelativeTime } from '../../components/RelativeTime';
 import { formatCount, formatCurrent, formatTemperature } from '../../lib/format';
+import { useShowingLastKnown } from '../../live/liveStatus';
 
 interface DeviceCardProps {
   device: Device;
@@ -10,7 +11,9 @@ interface DeviceCardProps {
 }
 
 export function DeviceCard({ device, reading }: DeviceCardProps) {
-  const online = device.health.status === 'ONLINE';
+  const lastKnown = useShowingLastKnown();
+  // Current values only while the device is online and the stream is live.
+  const current = device.health.status === 'ONLINE' && !lastKnown;
   const fault = reading?.state === 'FAULT';
   // After a connector restart the backend reports lastSeenAt: null, but the last
   // reading is still known; its receivedAt is the same instant.
@@ -36,17 +39,17 @@ export function DeviceCard({ device, reading }: DeviceCardProps) {
             <HealthBadge status={device.health.status} />
           </Group>
         </Stack>
-        <div style={{ opacity: online ? 1 : 0.5 }}>
+        <div style={{ opacity: current ? 1 : 0.5 }}>
           {reading ? <LineStateBadge state={reading.state} /> : null}
         </div>
       </Group>
 
-      {/* Not ONLINE: keep the last known values, dimmed. */}
+      {/* Not current: keep the last known values, dimmed. */}
       <SimpleGrid
         cols={2}
         mt="md"
-        style={{ opacity: online ? 1 : 0.45 }}
-        aria-label={online ? undefined : 'Son bilinen değerler'}
+        style={{ opacity: current ? 1 : 0.45 }}
+        aria-label={current ? undefined : 'Son bilinen değerler'}
       >
         <Metric label="Üretim" value={formatCount(reading?.productionCount)} />
         <Metric label="Fire" value={formatCount(reading?.scrapCount)} />
@@ -56,8 +59,9 @@ export function DeviceCard({ device, reading }: DeviceCardProps) {
 
       <Text size="xs" c="dimmed" mt="md">
         Son veri: <RelativeTime value={lastSeenAt} />
+        {lastKnown && ' · son bilinen durum'}
       </Text>
-      {device.health.lastError && !online && (
+      {device.health.lastError && device.health.status !== 'ONLINE' && (
         <Text size="xs" c="red" mt={4} lineClamp={2} title={device.health.lastError}>
           {device.health.lastError}
         </Text>

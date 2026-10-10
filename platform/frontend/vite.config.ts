@@ -2,7 +2,8 @@
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
-const BACKEND_URL = 'http://localhost:3000';
+// Override to point a second dev server at another backend instance.
+const BACKEND_URL = process.env.BACKEND_URL ?? 'http://localhost:3000';
 
 export default defineConfig({
   plugins: [react()],
@@ -29,6 +30,6 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['src/**/*.test.ts'],
+    include: ['src/**/*.test.{ts,tsx}'],
   },
 });

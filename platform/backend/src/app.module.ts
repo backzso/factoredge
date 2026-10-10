@@ -5,6 +5,7 @@ import { AuthModule } from './auth/auth.module';
 import { validateEnv } from './config/env.validation';
 import { DevicesModule } from './devices/devices.module';
 import { HealthModule } from './health/health.module';
+import { LifecycleModule } from './lifecycle/lifecycle.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { StreamModule } from './realtime/stream.module';
 import { UsersModule } from './users/users.module';
@@ -24,6 +25,7 @@ import { UsersModule } from './users/users.module';
     HealthModule,
     DevicesModule,
     StreamModule,
+    LifecycleModule,
   ],
 })
 export class AppModule {}

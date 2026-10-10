@@ -1,8 +1,9 @@
-import { AppShell, Burger, Button, Group, NavLink, Text, Title } from '@mantine/core';
+import { Alert, AppShell, Burger, Button, Group, NavLink, Text, Title } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { NavLink as RouterNavLink, Outlet, useLocation } from 'react-router';
 import { useCan, useLogout, useMe } from '../../api/auth';
 import { ROLE_LABEL } from '../../lib/labels';
+import { LiveStatusContext } from '../../live/liveStatus';
 import { useLiveStream } from '../../live/useLiveStream';
 import { LiveIndicator } from './LiveIndicator';
 
@@ -28,61 +29,70 @@ export function AppLayout() {
   ];
 
   return (
-    <AppShell
-      header={{ height: 60 }}
-      navbar={{ width: 220, breakpoint: 'sm', collapsed: { mobile: !navOpened } }}
-      padding="md"
-    >
-      <AppShell.Header>
-        <Group h="100%" px="md" justify="space-between" wrap="nowrap">
-          <Group gap="sm" wrap="nowrap">
-            <Burger opened={navOpened} onClick={toggleNav} hiddenFrom="sm" size="sm" />
-            <Title order={4}>FactorEdge</Title>
-            <LiveIndicator status={liveStatus} />
-          </Group>
-          <Group gap="sm" wrap="nowrap">
-            {user && (
-              <Text size="sm" visibleFrom="xs">
-                {user.username}{' '}
-                <Text span c="dimmed" size="sm">
-                  ({ROLE_LABEL[user.role]})
+    // Pages read it to mark health and values as last known while reconnecting.
+    <LiveStatusContext value={liveStatus}>
+      <AppShell
+        header={{ height: 60 }}
+        navbar={{ width: 220, breakpoint: 'sm', collapsed: { mobile: !navOpened } }}
+        padding="md"
+      >
+        <AppShell.Header>
+          <Group h="100%" px="md" justify="space-between" wrap="nowrap">
+            <Group gap="sm" wrap="nowrap">
+              <Burger opened={navOpened} onClick={toggleNav} hiddenFrom="sm" size="sm" />
+              <Title order={4}>FactorEdge</Title>
+              <LiveIndicator status={liveStatus} />
+            </Group>
+            <Group gap="sm" wrap="nowrap">
+              {user && (
+                <Text size="sm" visibleFrom="xs">
+                  {user.username}{' '}
+                  <Text span c="dimmed" size="sm">
+                    ({ROLE_LABEL[user.role]})
+                  </Text>
                 </Text>
-              </Text>
-            )}
-            <Button
-              variant="default"
-              size="xs"
-              onClick={() => logout.mutate()}
-              loading={logout.isPending}
-            >
-              Çıkış
-            </Button>
+              )}
+              <Button
+                variant="default"
+                size="xs"
+                onClick={() => logout.mutate()}
+                loading={logout.isPending}
+              >
+                Çıkış
+              </Button>
+            </Group>
           </Group>
-        </Group>
-      </AppShell.Header>
+        </AppShell.Header>
 
-      <AppShell.Navbar p="xs">
-        {items
-          .filter((item) => item.visible)
-          .map((item) => (
-            <NavLink
-              key={item.to}
-              component={RouterNavLink}
-              to={item.to}
-              label={item.label}
-              active={
-                item.to === '/'
-                  ? location.pathname === '/'
-                  : location.pathname.startsWith(item.to)
-              }
-              onClick={closeNav}
-            />
-          ))}
-      </AppShell.Navbar>
+        <AppShell.Navbar p="xs">
+          {items
+            .filter((item) => item.visible)
+            .map((item) => (
+              <NavLink
+                key={item.to}
+                component={RouterNavLink}
+                to={item.to}
+                label={item.label}
+                active={
+                  item.to === '/'
+                    ? location.pathname === '/'
+                    : location.pathname.startsWith(item.to)
+                }
+                onClick={closeNav}
+              />
+            ))}
+        </AppShell.Navbar>
 
-      <AppShell.Main>
-        <Outlet />
-      </AppShell.Main>
-    </AppShell>
+        <AppShell.Main>
+          {liveStatus === 'reconnecting' && (
+            <Alert color="yellow" mb="md" title="Canlı bağlantı yok">
+              Sağlık durumları ve değerler son bilinen haliyle gösteriliyor. Bağlantı geri
+              gelince otomatik olarak güncellenecek.
+            </Alert>
+          )}
+          <Outlet />
+        </AppShell.Main>
+      </AppShell>
+    </LiveStatusContext>
   );
 }

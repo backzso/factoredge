@@ -34,4 +34,15 @@ describe('describeError', () => {
     });
     expect(describeError(new ApiError(0, 'Network error')).title).toBe('Sunucuya ulaşılamadı');
   });
+
+  it.each([0, 502, 503, 504])('treats %i as an unreachable server, not a server error', (status) => {
+    expect(describeError(new ApiError(status, 'Bad Gateway'))).toEqual({
+      title: 'Sunucuya ulaşılamadı',
+      message: 'Ağ bağlantısını ve sunucunun çalıştığını kontrol edin.',
+    });
+  });
+
+  it('keeps 500 as a server error', () => {
+    expect(describeError(new ApiError(500, 'Internal server error')).title).toBe('Sunucu hatası');
+  });
 });
