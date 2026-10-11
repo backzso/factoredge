@@ -180,6 +180,18 @@ describe('Auth and user management (e2e)', () => {
         .expect(403);
     });
 
+    it('returns 403 for an ENGINEER on the user endpoints', async () => {
+      await createUser('engineer', Role.ENGINEER);
+      const cookie = await login('engineer');
+
+      await http().get('/api/users').set('Cookie', cookie).expect(403);
+      await http()
+        .post('/api/users')
+        .set('Cookie', cookie)
+        .send({ username: 'bob', password: PASSWORD, role: Role.ENGINEER })
+        .expect(403);
+    });
+
     it('serves public routes without a token', async () => {
       const res = await http().get('/api/health').expect(200);
       expect(res.body).toEqual({ status: 'ok', db: 'up' });
@@ -283,6 +295,33 @@ describe('Auth and user management (e2e)', () => {
         .send({ role: Role.VIEWER })
         .expect(409);
       expect(await prisma.user.count({ where: { role: Role.ADMIN } })).toBe(1);
+    });
+
+    it('does not count an ENGINEER as an admin', async () => {
+      await createUser('engineer', Role.ENGINEER);
+      await http()
+        .patch(`/api/users/${adminId}`)
+        .set('Cookie', adminCookie)
+        .send({ role: Role.ENGINEER })
+        .expect(409);
+      expect(await prisma.user.count({ where: { role: Role.ADMIN } })).toBe(1);
+    });
+
+    it('creates an ENGINEER and changes a role to ENGINEER', async () => {
+      const created = await http()
+        .post('/api/users')
+        .set('Cookie', adminCookie)
+        .send({ username: 'eng', password: PASSWORD, role: Role.ENGINEER })
+        .expect(201);
+      expect(created.body.role).toBe('ENGINEER');
+
+      const viewer = await createUser('viewer', Role.VIEWER);
+      const updated = await http()
+        .patch(`/api/users/${viewer.id}`)
+        .set('Cookie', adminCookie)
+        .send({ role: Role.ENGINEER })
+        .expect(200);
+      expect(updated.body.role).toBe('ENGINEER');
     });
 
     it('never leaves zero admins when two admins delete each other concurrently', async () => {

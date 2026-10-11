@@ -31,10 +31,11 @@ export function lineStateLabel(state: LineState): string {
 
 export const ROLE_LABEL: Record<Role, string> = {
   ADMIN: 'Yönetici',
+  ENGINEER: 'Mühendis',
   VIEWER: 'İzleyici',
 };
 
-export const ROLE_OPTIONS = (['ADMIN', 'VIEWER'] as const).map((role) => ({
+export const ROLE_OPTIONS = (['ADMIN', 'ENGINEER', 'VIEWER'] as const).map((role) => ({
   value: role,
   label: ROLE_LABEL[role],
 }));

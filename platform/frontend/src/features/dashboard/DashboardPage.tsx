@@ -30,7 +30,7 @@ export function DashboardPage() {
               .
             </>
           ) : (
-            'Bir yönetici cihaz eklediğinde burada görünecek.'
+            'Bir yönetici ya da mühendis cihaz eklediğinde burada görünecek.'
           )}
         </EmptyState>
       ) : (

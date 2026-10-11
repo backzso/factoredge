@@ -13,6 +13,8 @@ datasource db {
 
 enum Role {
   ADMIN
+  // Manages devices; user management stays ADMIN only.
+  ENGINEER
   VIEWER
 }
 

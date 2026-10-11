@@ -131,6 +131,36 @@ describe('Devices, readings and stream (e2e)', () => {
     });
   });
 
+  describe('as ENGINEER', () => {
+    let engineer: string;
+
+    beforeEach(async () => {
+      engineer = await loginAs('engineer', Role.ENGINEER);
+    });
+
+    it('can create, update and delete devices', async () => {
+      const created = await http()
+        .post('/api/devices')
+        .set('Cookie', engineer)
+        .send(modbusDevice())
+        .expect(201);
+      await http()
+        .patch(`/api/devices/${created.body.id}`)
+        .set('Cookie', engineer)
+        .send({ name: 'Renamed' })
+        .expect(200);
+      await http()
+        .delete(`/api/devices/${created.body.id}`)
+        .set('Cookie', engineer)
+        .expect(204);
+      expect(await prisma.device.count()).toBe(0);
+    });
+
+    it('gets 403 for the user list', async () => {
+      await http().get('/api/users').set('Cookie', engineer).expect(403);
+    });
+  });
+
   describe('as ADMIN', () => {
     let admin: string;
 

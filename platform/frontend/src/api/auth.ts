@@ -3,7 +3,7 @@ import { backoffDelay } from '../lib/backoff';
 import { api, ApiError, isServerUnavailable } from './client';
 import { qk } from './queryKeys';
 import { announceSession } from './sessionSync';
-import type { AuthUser } from './types';
+import type { AuthUser, Role } from './types';
 
 /**
  * The logged-in user, or null without a session (401).
@@ -98,13 +98,18 @@ export function endSession(
 
 export type Permission = 'manageDevices' | 'manageUsers';
 
-const PERMISSIONS: Record<Permission, ReadonlyArray<AuthUser['role']>> = {
-  manageDevices: ['ADMIN'],
-  manageUsers: ['ADMIN'],
+/**
+ * Every permission of the UI, per role. Reading (dashboard, history, devices,
+ * events) needs none. Mirrors the @Roles() of the backend controllers.
+ */
+export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
+  ADMIN: ['manageDevices', 'manageUsers'],
+  ENGINEER: ['manageDevices'],
+  VIEWER: [],
 };
 
 export function can(user: AuthUser | null | undefined, permission: Permission): boolean {
-  return !!user && PERMISSIONS[permission].includes(user.role);
+  return !!user && ROLE_PERMISSIONS[user.role].includes(permission);
 }
 
 /** The single role check of the UI. The backend enforces the same rules. */

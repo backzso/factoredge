@@ -15,7 +15,7 @@ import { type DeviceView, DevicesService } from './devices.service';
 import { CreateDeviceDto } from './dto/create-device.dto';
 import { UpdateDeviceDto } from './dto/update-device.dto';
 
-/** Reads are open to any logged-in user; writes are ADMIN only. */
+/** Reads are open to any logged-in user; writes are for ADMIN and ENGINEER. */
 @Controller('devices')
 export class DevicesController {
   constructor(private readonly devices: DevicesService) {}
@@ -37,13 +37,13 @@ export class DevicesController {
   }
 
   @Post()
-  @Roles(Role.ADMIN)
+  @Roles(Role.ADMIN, Role.ENGINEER)
   create(@Body() dto: CreateDeviceDto): Promise<DeviceView> {
     return this.devices.create(dto);
   }
 
   @Patch(':id')
-  @Roles(Role.ADMIN)
+  @Roles(Role.ADMIN, Role.ENGINEER)
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateDeviceDto,
@@ -52,7 +52,7 @@ export class DevicesController {
   }
 
   @Delete(':id')
-  @Roles(Role.ADMIN)
+  @Roles(Role.ADMIN, Role.ENGINEER)
   @HttpCode(204)
   remove(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
     return this.devices.remove(id);

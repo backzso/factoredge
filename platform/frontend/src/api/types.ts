@@ -6,7 +6,7 @@
 // - telemetry/reading.mapper.ts     ReadingDto
 // - realtime/*                      SSE events
 
-export type Role = 'ADMIN' | 'VIEWER';
+export type Role = 'ADMIN' | 'ENGINEER' | 'VIEWER';
 export type Protocol = 'MODBUS' | 'MQTT';
 export type LineState = 'RUNNING' | 'STOPPED' | 'FAULT';
 export type HealthStatus =

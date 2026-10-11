@@ -72,7 +72,7 @@ cd ../frontend && npm install && npm run dev    # http://localhost:5173
 - state (RUNNING | STOPPED | FAULT)
 - Birincil anahtar: (device_id, ts)
 
-**`users`:** id, username (unique), password_hash, role (ADMIN | VIEWER)
+**`users`:** id, username (unique), password_hash, role (ADMIN | ENGINEER | VIEWER)
 
 **`events`:** şemada var, kullanılmıyor
 
@@ -123,6 +123,7 @@ cd ../frontend && npm install && npm run dev    # http://localhost:5173
 - `passwordHash` beyaz liste `select` ile hiç çekilmez (kara liste değil).
 - Login'de kullanıcı yoksa bile sahte hash ile karşılaştırma: zamanlama farkından kullanıcı adı tahmin edilemez. İki hatalı girişin yanıtı bayt bayt aynı.
 - Son admin koruması: `SELECT … ORDER BY id FOR UPDATE` (kötümser kilit, sıralı kilitleme ile deadlock yok).
+- **Mühendis rolü (bonus):** Cihaz ekleme/düzenleme/silme ADMIN + ENGINEER (`@Roles(Role.ADMIN, Role.ENGINEER)`), kullanıcı yönetimi sadece ADMIN, okuma herkes. ENGINEER admin sayılmaz: son admini mühendise düşürmek de 409. Frontend'de izinler tek yerde, rol → izin tablosu (`ROLE_PERMISSIONS`, `api/auth.ts`); menü, butonlar ve `RequireCan` buradan okur. Enum'a değer eklemek tek satırlık migration (`ALTER TYPE … ADD VALUE`).
 
 **Diğer kararlar:**
 - **Sağlık:** bağlantı + tazelik. Eşik = beklenen aralık × 3 (Modbus `pollIntervalMs × 3`, MQTT 3 sn). İlk veri için tanınan süre var. OFFLINE'dayken gelen `connecting` durumu değiştirmez (yanıp sönme yok).
@@ -216,7 +217,7 @@ En güçlü üçü: **2, 3 ve 6.**
 - **Kamera bonusu:** VM'de bir servis (ör. MediaPipe ile yüz ve göz noktaları; göz kapanma oranı, esneme, baş eğimi; kadrajda kişi yok) sadece sınıf + zamanı `factory/desk1/operator` topic'ine yayınlardı. Platformda yeni bir connector türü (factory'de bir `case`). Ham görüntü VM'den hiç çıkmazdı.
 - **Platformda MQTT status / LWT dinlemek:** Şu an Bant 2 simülatörü durunca kart STALE oluyor (broker bağlantısı sağlam). Bant 1 durunca OFFLINE. Status aboneliği + bir zod şemasıyla Bant 2 de OFFLINE olurdu.
 - **Bağlantı kopukken tampon:** MQTT QoS 1 + kalıcı oturum (`clean: false`) ya da simülatör tarafında kuyruk. Zemin hazır: (device_id, ts) birincil anahtarı + `skipDuplicates` tekrar gönderimde çift kayıt oluşturmaz, `seq` boşlukları gösterir.
-- **Olay kaydı** (tablo hazır), **mühendis rolü** (enum + `@Roles`), **eşik alarmı**, **verimlilik göstergesi.**
+- **Olay kaydı** (tablo hazır), **eşik alarmı**, **verimlilik göstergesi.**
 - **TimescaleDB hypertable** ve 60 dakikadan uzun aralıklar için **downsampling.**
 - **Backend'den makine tarafından okunabilir hata kodları** (`LAST_ADMIN` gibi). Şu an frontend sınırlı bir mesaj eşlemesi yapıyor.
 - **Parola sıfırlama eski token'ları geçersiz kılmıyor** → token sürümlemesi.
