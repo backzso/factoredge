@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { backoffDelay } from '../lib/backoff';
 import { api, ApiError, isServerUnavailable } from './client';
 import { qk } from './queryKeys';
+import { announceSession } from './sessionSync';
 import type { AuthUser } from './types';
 
 /**
@@ -65,6 +66,7 @@ export function useLogin() {
       // Drop anything cached for a previous user before showing the app.
       queryClient.clear();
       queryClient.setQueryData(qk.me, user);
+      announceSession({ type: 'login', userId: user.id });
     },
   });
 }
@@ -75,7 +77,11 @@ export function useLogout() {
     mutationFn: () =>
       api<void>('/auth/logout', { method: 'POST', authRedirect: false }),
     // Leave the session locally even if the request failed.
-    onSettled: () => endSession(queryClient),
+    onSettled: () => {
+      const me = queryClient.getQueryData<AuthUser | null>(qk.me);
+      announceSession({ type: 'logout', userId: me?.id ?? null });
+      endSession(queryClient);
+    },
   });
 }
 
@@ -83,7 +89,10 @@ export function useLogout() {
 export function endSession(
   queryClient: ReturnType<typeof useQueryClient>,
 ): void {
-  queryClient.clear();
+  // ['me'] is set rather than removed: removing a query does not notify its
+  // observers, so RequireAuth would only notice on some unrelated re-render
+  // (a tab told by another tab, or by the live stream, has none).
+  queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== qk.me[0] });
   queryClient.setQueryData(qk.me, null);
 }
 

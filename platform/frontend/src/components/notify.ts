@@ -9,3 +9,7 @@ export function notifyError(error: unknown): void {
 export function notifySuccess(message: string): void {
   notifications.show({ color: 'green', message });
 }
+
+export function notifyInfo(title: string, message: string): void {
+  notifications.show({ color: 'blue', title, message, autoClose: 8_000 });
+}

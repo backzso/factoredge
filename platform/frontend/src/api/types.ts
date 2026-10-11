@@ -150,6 +150,26 @@ export type LiveEvent =
   | DeviceRemovedEvent
   | HeartbeatEvent;
 
+// Sent only to the streams of the user they concern.
+
+export interface SessionEndedEvent {
+  type: 'session-ended';
+  /** deleted: the user was removed; expired: the token ran out. The stream then ends. */
+  data: { reason: 'deleted' | 'expired' };
+}
+
+export interface SessionChangedEvent {
+  type: 'session-changed';
+  data: { changes: Array<'role' | 'password'> };
+}
+
+export type SessionEvent = SessionEndedEvent | SessionChangedEvent;
+
+export const SESSION_EVENT_TYPES = [
+  'session-ended',
+  'session-changed',
+] as const satisfies readonly SessionEvent['type'][];
+
 export const LIVE_EVENT_TYPES = [
   'snapshot',
   'telemetry',

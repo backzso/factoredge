@@ -8,13 +8,20 @@ import { hashPassword } from '../auth/password';
 import { Prisma, Role } from '../generated/prisma/client';
 import { isUniqueViolation } from '../prisma/prisma-errors';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  RealtimeService,
+  type SessionChange,
+} from '../realtime/realtime.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { type PublicUser, publicUserSelect } from './user.select';
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly realtime: RealtimeService,
+  ) {}
 
   findAll(): Promise<PublicUser[]> {
     return this.prisma.user.findMany({
@@ -46,21 +53,34 @@ export class UsersService {
     const passwordHash =
       dto.password === undefined ? undefined : await hashPassword(dto.password);
 
-    return this.withAdminsLocked(async (tx, adminIds) => {
-      const target = await this.findTargetOrThrow(tx, id);
-      const demotesAdmin =
-        target.role === Role.ADMIN &&
-        dto.role !== undefined &&
-        dto.role !== Role.ADMIN;
-      if (demotesAdmin) {
-        assertAnotherAdminExists(adminIds, id);
-      }
-      return tx.user.update({
-        where: { id },
-        data: { role: dto.role, passwordHash },
-        select: publicUserSelect,
-      });
-    });
+    const { user, changes } = await this.withAdminsLocked(
+      async (tx, adminIds) => {
+        const target = await this.findTargetOrThrow(tx, id);
+        const demotesAdmin =
+          target.role === Role.ADMIN &&
+          dto.role !== undefined &&
+          dto.role !== Role.ADMIN;
+        if (demotesAdmin) {
+          assertAnotherAdminExists(adminIds, id);
+        }
+        const updated = await tx.user.update({
+          where: { id },
+          data: { role: dto.role, passwordHash },
+          select: publicUserSelect,
+        });
+        const changes: SessionChange[] = [];
+        if (dto.role !== undefined && dto.role !== target.role) {
+          changes.push('role');
+        }
+        if (passwordHash !== undefined) changes.push('password');
+        return { user: updated, changes };
+      },
+    );
+    // After the commit, so a client reloading itself sees the new state.
+    if (changes.length > 0) {
+      this.realtime.sessionChanged(id, changes);
+    }
+    return user;
   }
 
   async remove(id: string, actorId: string): Promise<void> {
@@ -74,6 +94,7 @@ export class UsersService {
       }
       await tx.user.delete({ where: { id } });
     });
+    this.realtime.endSessions(id, 'deleted');
   }
 
   /**

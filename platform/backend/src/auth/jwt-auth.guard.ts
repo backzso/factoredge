@@ -59,6 +59,9 @@ export class JwtAuthGuard implements CanActivate {
     }
 
     request.user = user;
+    // Long-lived responses (the SSE stream) end when the token does.
+    request.tokenExpiresAt =
+      payload.exp === undefined ? undefined : payload.exp * 1000;
     return true;
   }
 }

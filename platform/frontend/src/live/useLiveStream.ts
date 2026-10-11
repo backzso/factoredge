@@ -1,9 +1,10 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { api, ApiError, notifyUnauthorized } from '../api/client';
-import { type LiveEvent, LIVE_EVENT_TYPES } from '../api/types';
+import { type LiveEvent, LIVE_EVENT_TYPES, type SessionEvent, SESSION_EVENT_TYPES } from '../api/types';
 import { backoffDelay } from '../lib/backoff';
 import { applyLiveEvent } from './applyLiveEvent';
+import { applySessionEvent } from './sessionEvents';
 import {
   checkSilence,
   recordActivity,
@@ -26,6 +27,9 @@ export type LiveStatus = 'connecting' | 'live' | 'reconnecting';
  *     the connection open after the backend died, without any error.
  *   /auth/me then tells whether the session ended (the 401 handler sends the
  *   user to the login page); otherwise the stream is reopened with a growing delay.
+ * - Session events concern this user only. session-ended (user deleted, token
+ *   expired) closes the stream for good before the browser can reconnect and
+ *   ends the session; session-changed (role, password) reloads ['me'].
  */
 export function useLiveStream(): LiveStatus {
   const queryClient = useQueryClient();
@@ -56,16 +60,31 @@ export function useLiveStream(): LiveStatus {
       }, delayMs);
     };
 
-    const handleEvent = (type: LiveEvent['type']) => (message: MessageEvent<string>) => {
-      markActivity();
-      let data: unknown;
+    const parse = (type: string, message: MessageEvent<string>): unknown => {
       try {
-        data = JSON.parse(message.data);
+        return JSON.parse(message.data);
       } catch {
         console.warn(`live: unparsable ${type} event`, message.data);
-        return;
+        return undefined;
       }
+    };
+
+    const handleEvent = (type: LiveEvent['type']) => (message: MessageEvent<string>) => {
+      markActivity();
+      const data = parse(type, message);
+      if (data === undefined) return;
       applyLiveEvent(queryClient, { type, data } as LiveEvent, Date.now());
+    };
+
+    const handleSessionEvent = (type: SessionEvent['type']) => (message: MessageEvent<string>) => {
+      markActivity();
+      if (type === 'session-ended') {
+        // The server ends the response next; the browser must not reconnect.
+        stop();
+      }
+      // Acted on even if the payload is unreadable: the type says enough.
+      const data = parse(type, message) ?? {};
+      void applySessionEvent(queryClient, { type, data } as SessionEvent);
     };
 
     const open = () => {
@@ -81,6 +100,9 @@ export function useLiveStream(): LiveStatus {
       });
       for (const type of LIVE_EVENT_TYPES) {
         es.addEventListener(type, handleEvent(type));
+      }
+      for (const type of SESSION_EVENT_TYPES) {
+        es.addEventListener(type, handleSessionEvent(type));
       }
       es.addEventListener('error', () => {
         if (disposed || es !== source) return;
@@ -118,13 +140,17 @@ export function useLiveStream(): LiveStatus {
       failures += 1;
     };
 
-    open();
-    return () => {
+    /** Closes the stream for good. */
+    const stop = () => {
       disposed = true;
       clearTimeout(silenceTimer);
       clearTimeout(reopenTimer);
       source?.close();
+      source = undefined;
     };
+
+    open();
+    return stop;
   }, [queryClient]);
 
   return status;

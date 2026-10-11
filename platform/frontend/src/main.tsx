@@ -10,6 +10,7 @@ import { createRoot } from 'react-dom/client';
 import { RouterProvider } from 'react-router';
 import { endSession } from './api/auth';
 import { isApiError, setUnauthorizedHandler } from './api/client';
+import { startSessionSync } from './api/sessionSync';
 import { router } from './router';
 
 const queryClient = new QueryClient({
@@ -26,6 +27,7 @@ const queryClient = new QueryClient({
 });
 
 setUnauthorizedHandler(() => endSession(queryClient));
+startSessionSync(queryClient);
 
 const theme = createTheme({
   primaryColor: 'blue',

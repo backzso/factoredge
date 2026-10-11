@@ -2,7 +2,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, renderHook } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { notifications } from '@mantine/notifications';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { useMe } from '../api/auth';
 import { setUnauthorizedHandler } from '../api/client';
 import { useLiveStream } from './useLiveStream';
 
@@ -34,9 +36,9 @@ class FakeEventSource {
 
 const latest = () => FakeEventSource.instances.at(-1)!;
 
-function mockMe(status: number) {
+function mockMe(status: number, role: 'ADMIN' | 'VIEWER' = 'ADMIN') {
   const fetchMock = vi.fn(async () =>
-    new Response(JSON.stringify(status === 200 ? { user: { id: 'u', username: 'a', role: 'ADMIN' } } : {}), {
+    new Response(JSON.stringify(status === 200 ? { user: { id: 'u', username: 'a', role } } : {}), {
       status,
       headers: { 'Content-Type': 'application/json' },
     }),
@@ -194,5 +196,81 @@ describe('useLiveStream silence watchdog', () => {
     await advance(15_000);
     expect(result.current).toBe('reconnecting');
     expect(latest().readyState).toBe(FakeEventSource.CLOSED);
+  });
+});
+
+describe('useLiveStream session events', () => {
+  const ME = { id: 'u', username: 'a', role: 'ADMIN' as const };
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
+    FakeEventSource.instances = [];
+    vi.stubGlobal('EventSource', FakeEventSource);
+    vi.spyOn(notifications, 'show').mockReturnValue('');
+  });
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  function loggedIn() {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(['me'], ME);
+    queryClient.setQueryData(['users'], [ME]);
+    queryClient.setQueryData(['devices'], []);
+    return queryClient;
+  }
+
+  it('session-ended closes the stream for good, clears the cache and shows the notice', async () => {
+    const fetchMock = mockMe(200);
+    const queryClient = loggedIn();
+    renderStream(queryClient);
+    const stream = latest();
+    act(() => stream.emit('open'));
+
+    act(() => stream.emit('session-ended', { reason: 'deleted' }));
+
+    expect(stream.readyState).toBe(FakeEventSource.CLOSED);
+    expect(queryClient.getQueryData(['me'])).toBeNull();
+    expect(queryClient.getQueryData(['users'])).toBeUndefined();
+    expect(queryClient.getQueryData(['devices'])).toBeUndefined();
+    expect(notifications.show).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Oturumunuz sonlandırıldı' }),
+    );
+
+    // The server then ends the response: no reconnect, no session check, no new stream.
+    act(() => stream.emit('error'));
+    await advance(60_000);
+    expect(FakeEventSource.instances).toHaveLength(1);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('session-changed reloads ["me"] and keeps the stream open', async () => {
+    const fetchMock = mockMe(200, 'VIEWER');
+    const queryClient = loggedIn();
+    // Like the layout: useMe gives ['me'] its query function.
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => ({ me: useMe().data, live: useLiveStream() }), { wrapper });
+    const stream = latest();
+    act(() => stream.emit('open'));
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    act(() => stream.emit('session-changed', { changes: ['role'] }));
+    await act(async () => {
+      await vi.waitFor(() => expect(result.current.me?.role).toBe('VIEWER'));
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/auth/me', expect.anything());
+    expect(result.current.live).toBe('live');
+
+    expect(stream.readyState).toBe(FakeEventSource.OPEN);
+    expect(queryClient.getQueryData(['devices'])).toEqual([]);
+    expect(notifications.show).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'Rolünüz Yönetici → İzleyici olarak değiştirildi.' }),
+    );
   });
 });
