@@ -25,6 +25,7 @@ export function AppLayout() {
     { to: '/', label: 'Panel', visible: true },
     { to: '/history', label: 'Geçmiş', visible: true },
     { to: '/devices', label: 'Cihazlar', visible: true },
+    { to: '/events', label: 'Olaylar', visible: true },
     { to: '/users', label: 'Kullanıcılar', visible: canManageUsers },
   ];
 

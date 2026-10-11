@@ -4,6 +4,7 @@ import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from './auth/auth.module';
 import { validateEnv } from './config/env.validation';
 import { DevicesModule } from './devices/devices.module';
+import { EventsModule } from './events/events.module';
 import { HealthModule } from './health/health.module';
 import { LifecycleModule } from './lifecycle/lifecycle.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -24,6 +25,7 @@ import { UsersModule } from './users/users.module';
     UsersModule,
     HealthModule,
     DevicesModule,
+    EventsModule,
     StreamModule,
     LifecycleModule,
   ],

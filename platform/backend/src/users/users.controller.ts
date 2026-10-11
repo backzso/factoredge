@@ -28,16 +28,20 @@ export class UsersController {
   }
 
   @Post()
-  create(@Body() dto: CreateUserDto): Promise<PublicUser> {
-    return this.users.create(dto);
+  create(
+    @Body() dto: CreateUserDto,
+    @CurrentUser() actor: AuthUser,
+  ): Promise<PublicUser> {
+    return this.users.create(dto, actor);
   }
 
   @Patch(':id')
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateUserDto,
+    @CurrentUser() actor: AuthUser,
   ): Promise<PublicUser> {
-    return this.users.update(id, dto);
+    return this.users.update(id, dto, actor);
   }
 
   @Delete(':id')
@@ -46,6 +50,6 @@ export class UsersController {
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() actor: AuthUser,
   ): Promise<void> {
-    return this.users.remove(id, actor.id);
+    return this.users.remove(id, actor);
   }
 }

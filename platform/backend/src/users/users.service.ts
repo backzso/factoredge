@@ -5,7 +5,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { hashPassword } from '../auth/password';
-import { Prisma, Role } from '../generated/prisma/client';
+import { EventsService } from '../events/events.service';
+import { EventSeverity, Prisma, Role } from '../generated/prisma/client';
 import { isUniqueViolation } from '../prisma/prisma-errors';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -14,13 +15,18 @@ import {
 } from '../realtime/realtime.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { type PublicUser, publicUserSelect } from './user.select';
+import {
+  type AuthUser,
+  type PublicUser,
+  publicUserSelect,
+} from './user.select';
 
 @Injectable()
 export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly realtime: RealtimeService,
+    private readonly events: EventsService,
   ) {}
 
   findAll(): Promise<PublicUser[]> {
@@ -30,10 +36,11 @@ export class UsersService {
     });
   }
 
-  async create(dto: CreateUserDto): Promise<PublicUser> {
+  async create(dto: CreateUserDto, actor: AuthUser): Promise<PublicUser> {
     const passwordHash = await hashPassword(dto.password);
+    let user: PublicUser;
     try {
-      return await this.prisma.user.create({
+      user = await this.prisma.user.create({
         data: { username: dto.username, passwordHash, role: dto.role },
         select: publicUserSelect,
       });
@@ -43,9 +50,20 @@ export class UsersService {
       }
       throw error;
     }
+    this.events.record({
+      type: 'user.created',
+      severity: EventSeverity.INFO,
+      actor,
+      data: { targetUsername: user.username, role: user.role },
+    });
+    return user;
   }
 
-  async update(id: string, dto: UpdateUserDto): Promise<PublicUser> {
+  async update(
+    id: string,
+    dto: UpdateUserDto,
+    actor: AuthUser,
+  ): Promise<PublicUser> {
     if (dto.role === undefined && dto.password === undefined) {
       throw new BadRequestException('Provide at least one of: role, password');
     }
@@ -53,7 +71,7 @@ export class UsersService {
     const passwordHash =
       dto.password === undefined ? undefined : await hashPassword(dto.password);
 
-    const { user, changes } = await this.withAdminsLocked(
+    const { user, changes, previousRole } = await this.withAdminsLocked(
       async (tx, adminIds) => {
         const target = await this.findTargetOrThrow(tx, id);
         const demotesAdmin =
@@ -73,28 +91,53 @@ export class UsersService {
           changes.push('role');
         }
         if (passwordHash !== undefined) changes.push('password');
-        return { user: updated, changes };
+        return { user: updated, changes, previousRole: target.role };
       },
     );
     // After the commit, so a client reloading itself sees the new state.
+    // Announced before the events below are written: a stream learns the new
+    // role before it is offered an event filtered by it.
     if (changes.length > 0) {
-      this.realtime.sessionChanged(id, changes);
+      this.realtime.sessionChanged(id, changes, user.role);
+    }
+    if (changes.includes('role')) {
+      this.events.record({
+        type: 'user.role_changed',
+        severity: EventSeverity.INFO,
+        actor,
+        data: { targetUsername: user.username, previousRole, role: user.role },
+      });
+    }
+    if (changes.includes('password')) {
+      this.events.record({
+        type: 'user.password_reset',
+        severity: EventSeverity.INFO,
+        actor,
+        data: { targetUsername: user.username },
+      });
     }
     return user;
   }
 
-  async remove(id: string, actorId: string): Promise<void> {
-    if (id === actorId) {
+  async remove(id: string, actor: AuthUser): Promise<void> {
+    if (id === actor.id) {
       throw new BadRequestException('You cannot delete your own account');
     }
-    await this.withAdminsLocked(async (tx, adminIds) => {
+    const target = await this.withAdminsLocked(async (tx, adminIds) => {
       const target = await this.findTargetOrThrow(tx, id);
       if (target.role === Role.ADMIN) {
         assertAnotherAdminExists(adminIds, id);
       }
       await tx.user.delete({ where: { id } });
+      return target;
     });
     this.realtime.endSessions(id, 'deleted');
+    this.events.record({
+      type: 'user.deleted',
+      severity: EventSeverity.INFO,
+      actor,
+      data: { targetUsername: target.username, role: target.role },
+    });
   }
 
   /**
@@ -129,10 +172,10 @@ export class UsersService {
   private async findTargetOrThrow(
     tx: Prisma.TransactionClient,
     id: string,
-  ): Promise<{ role: Role }> {
+  ): Promise<{ username: string; role: Role }> {
     const target = await tx.user.findUnique({
       where: { id },
-      select: { role: true },
+      select: { username: true, role: true },
     });
     if (!target) {
       throw new NotFoundException('User not found');

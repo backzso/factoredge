@@ -4,6 +4,7 @@ import {
   formatCount,
   formatCurrent,
   formatDateTime,
+  formatTimestamp,
   formatRelative,
   formatSignalValue,
   formatTemperature,
@@ -78,6 +79,7 @@ describe('times (local)', () => {
     expect(formatTime(local)).toBe('14:05:09');
     expect(formatClock(local.getTime())).toBe('14:05');
     expect(formatDateTime(local.toISOString())).toBe('10.10.2026 14:05');
+    expect(formatTimestamp(local.toISOString())).toBe('10.10.2026 14:05:09');
     expect(formatTime(null)).toBe('—');
     expect(formatTime('not a date')).toBe('—');
   });

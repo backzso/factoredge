@@ -33,6 +33,9 @@ describe('sessionAction', () => {
 describe('roleChangeNotice', () => {
   it('names the old and the new role', () => {
     expect(roleChangeNotice(admin, viewer)).toBe('Rolünüz Yönetici → İzleyici olarak değiştirildi.');
+    expect(roleChangeNotice(viewer, { ...viewer, role: 'ENGINEER' })).toBe(
+      'Rolünüz İzleyici → Mühendis olarak değiştirildi.',
+    );
   });
 
   it('is silent when the role stayed (password change) or the user is gone', () => {

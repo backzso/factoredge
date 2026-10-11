@@ -9,8 +9,10 @@ import {
   Patch,
   Post,
 } from '@nestjs/common';
+import { CurrentUser } from '../auth/current-user.decorator';
 import { Roles } from '../auth/roles.decorator';
 import { Role } from '../generated/prisma/client';
+import type { AuthUser } from '../users/user.select';
 import { type DeviceView, DevicesService } from './devices.service';
 import { CreateDeviceDto } from './dto/create-device.dto';
 import { UpdateDeviceDto } from './dto/update-device.dto';
@@ -38,8 +40,11 @@ export class DevicesController {
 
   @Post()
   @Roles(Role.ADMIN, Role.ENGINEER)
-  create(@Body() dto: CreateDeviceDto): Promise<DeviceView> {
-    return this.devices.create(dto);
+  create(
+    @Body() dto: CreateDeviceDto,
+    @CurrentUser() actor: AuthUser,
+  ): Promise<DeviceView> {
+    return this.devices.create(dto, actor);
   }
 
   @Patch(':id')
@@ -47,14 +52,18 @@ export class DevicesController {
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateDeviceDto,
+    @CurrentUser() actor: AuthUser,
   ): Promise<DeviceView> {
-    return this.devices.update(id, dto);
+    return this.devices.update(id, dto, actor);
   }
 
   @Delete(':id')
   @Roles(Role.ADMIN, Role.ENGINEER)
   @HttpCode(204)
-  remove(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
-    return this.devices.remove(id);
+  remove(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() actor: AuthUser,
+  ): Promise<void> {
+    return this.devices.remove(id, actor);
   }
 }

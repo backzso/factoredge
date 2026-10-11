@@ -119,6 +119,21 @@ export function formatDateTime(value: TimeInput): string {
     : EMPTY;
 }
 
+/** Local date and time with seconds: "10.10.2026 14:05:09" (event log). */
+export function formatTimestamp(value: TimeInput): string {
+  const date = toDate(value);
+  return date
+    ? date.toLocaleString(LOCALE, {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      })
+    : EMPTY;
+}
+
 /**
  * "12 sn önce", "3 dk önce", "2 sa önce", "4 gün önce". A timestamp slightly in
  * the future (clock skew between server and browser) counts as "0 sn önce".

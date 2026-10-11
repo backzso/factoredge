@@ -3,6 +3,7 @@ import { LoginPage } from './features/auth/LoginPage';
 import { RequireAuth, RequireCan } from './features/auth/guards';
 import { DashboardPage } from './features/dashboard/DashboardPage';
 import { DevicesPage } from './features/devices/DevicesPage';
+import { EventsPage } from './features/events/EventsPage';
 import { AppLayout } from './features/layout/AppLayout';
 import { RouteError } from './features/layout/RouteError';
 import { UsersPage } from './features/users/UsersPage';
@@ -32,6 +33,7 @@ export const router = createBrowserRouter([
             }),
           },
           { path: 'devices', element: <DevicesPage /> },
+          { path: 'events', element: <EventsPage /> },
           {
             path: 'users',
             element: (

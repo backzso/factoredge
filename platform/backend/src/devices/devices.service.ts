@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { isDeepStrictEqual } from 'node:util';
 import { ZodError } from 'zod';
 import { formatZodIssues } from '../common/zod-issues';
 import { ConnectorManager } from '../connectors/connector-manager.service';
@@ -11,9 +12,12 @@ import {
   type DeviceHealth,
   DeviceHealthService,
 } from '../device-health/device-health.service';
-import { Prisma, Protocol } from '../generated/prisma/client';
+import type { DeviceChange } from '../events/event-types';
+import { EventsService } from '../events/events.service';
+import { EventSeverity, Prisma, Protocol } from '../generated/prisma/client';
 import { isRecordNotFound, isUniqueViolation } from '../prisma/prisma-errors';
 import { PrismaService } from '../prisma/prisma.service';
+import type { AuthUser } from '../users/user.select';
 import {
   DEVICE_TEMPLATES,
   type DeviceConfig,
@@ -42,6 +46,7 @@ export class DevicesService {
     private readonly prisma: PrismaService,
     private readonly connectors: ConnectorManager,
     private readonly health: DeviceHealthService,
+    private readonly events: EventsService,
   ) {}
 
   async findAll(): Promise<DeviceView[]> {
@@ -67,7 +72,7 @@ export class DevicesService {
     return DEVICE_TEMPLATES;
   }
 
-  async create(dto: CreateDeviceDto): Promise<DeviceView> {
+  async create(dto: CreateDeviceDto, actor: AuthUser): Promise<DeviceView> {
     const { config } = validateConfig(dto.protocol, dto.config);
     let row: DeviceRow;
     try {
@@ -84,10 +89,21 @@ export class DevicesService {
       throw mapWriteError(error);
     }
     void this.connectors.deviceSaved(row.id);
+    this.events.record({
+      type: 'device.created',
+      severity: EventSeverity.INFO,
+      deviceId: row.id,
+      actor,
+      data: { deviceName: row.name, protocol: row.protocol },
+    });
     return withPendingHealth(row);
   }
 
-  async update(id: string, dto: UpdateDeviceDto): Promise<DeviceView> {
+  async update(
+    id: string,
+    dto: UpdateDeviceDto,
+    actor: AuthUser,
+  ): Promise<DeviceView> {
     if (
       dto.name === undefined &&
       dto.enabled === undefined &&
@@ -98,16 +114,18 @@ export class DevicesService {
       );
     }
 
+    // Read first: the protocol (never changes) validates the config, and the
+    // previous values tell the event what changed. Not atomic with the update:
+    // under concurrent edits the change list can be off, the row never is.
+    const existing = await this.prisma.device.findUnique({
+      where: { id },
+      select: { protocol: true, name: true, enabled: true, config: true },
+    });
+    if (!existing) {
+      throw new NotFoundException('Device not found');
+    }
     let config: DeviceConfig['config'] | undefined;
     if (dto.config !== undefined) {
-      // The protocol never changes, so reading it outside the update is safe.
-      const existing = await this.prisma.device.findUnique({
-        where: { id },
-        select: { protocol: true },
-      });
-      if (!existing) {
-        throw new NotFoundException('Device not found');
-      }
       config = validateConfig(existing.protocol, dto.config).config;
     }
 
@@ -126,17 +144,44 @@ export class DevicesService {
       throw mapWriteError(error);
     }
     void this.connectors.deviceSaved(id);
+
+    const changes = changedFields(existing, row);
+    if (changes.length > 0) {
+      this.events.record({
+        type: 'device.updated',
+        severity: EventSeverity.INFO,
+        deviceId: id,
+        actor,
+        data: {
+          deviceName: row.name,
+          ...(changes.includes('name') ? { previousName: existing.name } : {}),
+          changes,
+          enabled: row.enabled,
+        },
+      });
+    }
     return withPendingHealth(row);
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(id: string, actor: AuthUser): Promise<void> {
+    let deleted: { name: string; protocol: Protocol };
     try {
-      // Readings are removed by ON DELETE CASCADE.
-      await this.prisma.device.delete({ where: { id } });
+      // Readings are removed by ON DELETE CASCADE; events stay (device_id SET NULL).
+      deleted = await this.prisma.device.delete({
+        where: { id },
+        select: { name: true, protocol: true },
+      });
     } catch (error) {
       throw mapWriteError(error);
     }
     void this.connectors.deviceDeleted(id);
+    // The row is gone, so the event cannot reference it; the name is in data.
+    this.events.record({
+      type: 'device.deleted',
+      severity: EventSeverity.INFO,
+      actor,
+      data: { deviceName: deleted.name, protocol: deleted.protocol },
+    });
   }
 
   private withLiveHealth(row: DeviceRow): DeviceView {
@@ -162,6 +207,23 @@ function pendingHealth(enabled: boolean): DeviceHealth {
     lastSeenAt: null,
     lastError: null,
   };
+}
+
+type ChangeableFields = Pick<DeviceRow, 'name' | 'enabled' | 'config'>;
+
+/**
+ * Both sides come from the database. Deep comparison ignores key order, which
+ * jsonb does not preserve.
+ */
+function changedFields(
+  before: ChangeableFields,
+  after: ChangeableFields,
+): DeviceChange[] {
+  const changes: DeviceChange[] = [];
+  if (before.name !== after.name) changes.push('name');
+  if (before.enabled !== after.enabled) changes.push('enabled');
+  if (!isDeepStrictEqual(before.config, after.config)) changes.push('config');
+  return changes;
 }
 
 function validateConfig(protocol: Protocol, config: unknown): DeviceConfig {

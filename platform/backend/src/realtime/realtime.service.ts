@@ -1,6 +1,8 @@
 import { BeforeApplicationShutdown, Injectable } from '@nestjs/common';
 import { Observable, ReplaySubject, Subject, type Subscriber } from 'rxjs';
 import type { DeviceHealth } from '../device-health/device-health.service';
+import type { EventDto } from '../events/event-types';
+import type { Role } from '../generated/prisma/client';
 import type { ReadingDto } from '../telemetry/reading.mapper';
 
 // Shaped like Nest's MessageEvent: `type` becomes the SSE "event:" field, so the
@@ -8,7 +10,9 @@ import type { ReadingDto } from '../telemetry/reading.mapper';
 export type RealtimeEvent =
   | { type: 'telemetry'; data: { deviceId: string; reading: ReadingDto } }
   | { type: 'status'; data: { deviceId: string } & DeviceHealth }
-  | { type: 'device-removed'; data: { deviceId: string } };
+  | { type: 'device-removed'; data: { deviceId: string } }
+  // A stored event (events/); streams pass it on only to users allowed to see it.
+  | { type: 'event'; data: EventDto };
 
 export type SessionEndReason = 'deleted' | 'expired';
 export type SessionChange = 'role' | 'password';
@@ -19,11 +23,13 @@ export type SessionChange = 'role' | 'password';
  */
 export type SessionEvent =
   | { type: 'session-ended'; data: { reason: SessionEndReason } }
-  | { type: 'session-changed'; data: { changes: SessionChange[] } };
+  // `role` is the user's role after the change; the stream filters events by it.
+  | { type: 'session-changed'; data: { changes: SessionChange[]; role: Role } };
 
 /**
  * In-process event bus for live updates. Publishers (telemetry, device health,
- * connector manager) push events; every open SSE stream subscribes.
+ * connector manager, events) push events; every open SSE stream subscribes, and
+ * so does the events module's recorder.
  *
  * Session events are targeted instead: each stream registers under its user id
  * while open, and the users service addresses a user's streams by that id.
@@ -79,8 +85,11 @@ export class RealtimeService implements BeforeApplicationShutdown {
   }
 
   /** Tells every open stream of the user that its role or password changed. */
-  sessionChanged(userId: string, changes: SessionChange[]): void {
-    this.sendToUser(userId, { type: 'session-changed', data: { changes } });
+  sessionChanged(userId: string, changes: SessionChange[], role: Role): void {
+    this.sendToUser(userId, {
+      type: 'session-changed',
+      data: { changes, role },
+    });
   }
 
   /** Runs before Nest closes the HTTP server, which waits for open responses. */

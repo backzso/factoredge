@@ -6,6 +6,7 @@ import { EmptyState } from '../../components/EmptyState';
 import { PageLoader } from '../../components/PageLoader';
 import { QueryError } from '../../components/QueryError';
 import { DeviceCard } from './DeviceCard';
+import { RecentEvents } from './RecentEvents';
 
 export function DashboardPage() {
   const devices = useDevices();
@@ -40,6 +41,7 @@ export function DashboardPage() {
           ))}
         </SimpleGrid>
       )}
+      <RecentEvents />
     </Stack>
   );
 }

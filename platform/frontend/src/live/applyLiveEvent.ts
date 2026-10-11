@@ -1,6 +1,6 @@
 import type { QueryClient } from '@tanstack/react-query';
-import { HISTORY_MINUTES, qk } from '../api/queryKeys';
-import type { Device, LatestReadings, LiveEvent, ReadingDto } from '../api/types';
+import { HISTORY_MINUTES, qk, RECENT_EVENTS_LIMIT } from '../api/queryKeys';
+import type { Device, EventDto, LatestReadings, LiveEvent, ReadingDto } from '../api/types';
 import {
   appendReading,
   applySnapshotToDevices,
@@ -12,6 +12,7 @@ import {
   removeDeviceFromDevices,
   removeDeviceFromLatest,
 } from './cacheReducers';
+import { type EventPages, prependEventToPages, prependRecent } from './eventReducers';
 
 /** Writes one live event into the query cache (thin glue over the pure reducers). */
 export function applyLiveEvent(
@@ -27,8 +28,10 @@ export function applyLiveEvent(
       queryClient.setQueryData<LatestReadings>(qk.latest, (latest) =>
         applySnapshotToLatest(latest, event),
       );
-      // After a reconnect the history has a gap; reload what is on screen.
+      // After a reconnect the history and the event log have a gap; reload
+      // what is on screen.
       void queryClient.invalidateQueries({ queryKey: qk.allReadings });
+      void queryClient.invalidateQueries({ queryKey: qk.allEvents });
       return;
     }
     case 'telemetry': {
@@ -65,8 +68,27 @@ export function applyLiveEvent(
       });
       return;
     }
+    case 'event':
+      prependToEventQueries(queryClient, event.data);
+      return;
     case 'heartbeat':
       return;
+  }
+}
+
+/** Every loaded event-log query: the events page per filter, and the dashboard list. */
+function prependToEventQueries(queryClient: QueryClient, event: EventDto): void {
+  for (const [key] of queryClient.getQueriesData({ queryKey: qk.allEvents })) {
+    if (key[1] === 'recent') {
+      queryClient.setQueryData<EventDto[]>(key, (list) =>
+        prependRecent(list, event, RECENT_EVENTS_LIMIT),
+      );
+    } else if (key[1] === 'list') {
+      const filter = key[2] === 'all' ? null : String(key[2]);
+      queryClient.setQueryData<EventPages>(key, (data) =>
+        prependEventToPages(data, event, filter),
+      );
+    }
   }
 }
 

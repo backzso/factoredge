@@ -23,6 +23,12 @@ enum Protocol {
   MQTT
 }
 
+enum EventSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
 enum LineState {
   RUNNING
   STOPPED
@@ -80,18 +86,26 @@ model Reading {
 }
 
 model Event {
-  id       String   @id @default(uuid()) @db.Uuid
-  ts       DateTime @default(now()) @db.Timestamptz(3)
+  id       String        @id @default(uuid()) @db.Uuid
+  ts       DateTime      @default(now()) @db.Timestamptz(3)
+  // Dotted kind, e.g. "device.status_changed"; the UI builds the sentence from type + data.
   type     String
-  deviceId String?  @map("device_id") @db.Uuid
-  userId   String?  @map("user_id") @db.Uuid
+  severity EventSeverity
+  deviceId String?       @map("device_id") @db.Uuid
+  // Who did it (admin actions); null for events raised by the platform itself.
+  userId   String?       @map("user_id") @db.Uuid
+  // Context copied at the time of the event (device name, usernames, values),
+  // so the event keeps its meaning after a rename or delete.
+  data     Json          @default("{}")
+  // English one-liner for logs and psql; not shown in the UI.
   message  String
 
   device Device? @relation(fields: [deviceId], references: [id], onDelete: SetNull)
   user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
 
-  @@index([ts])
-  @@index([deviceId])
+  // Newest first with a stable tie-break: the cursor of GET /api/events.
+  @@index([ts, id])
+  @@index([deviceId, ts])
   @@index([userId])
   @@map("events")
 }

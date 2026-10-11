@@ -53,5 +53,9 @@ export async function applySessionEvent(
   const before = queryClient.getQueryData<AuthUser | null>(qk.me);
   await queryClient.refetchQueries({ queryKey: qk.me, exact: true });
   const notice = roleChangeNotice(before, queryClient.getQueryData<AuthUser | null>(qk.me));
-  if (notice) notifyInfo('Yetkileriniz değişti', notice);
+  if (notice) {
+    notifyInfo('Yetkileriniz değişti', notice);
+    // The server filters the event log by role: reload what this role may see.
+    await queryClient.invalidateQueries({ queryKey: qk.allEvents });
+  }
 }

@@ -5,6 +5,7 @@
 // - device-health/*                 DeviceHealth, DeviceStatus
 // - telemetry/reading.mapper.ts     ReadingDto
 // - realtime/*                      SSE events
+// - events/event-types.ts           EventDto and the data of each event type
 
 export type Role = 'ADMIN' | 'ENGINEER' | 'VIEWER';
 export type Protocol = 'MODBUS' | 'MQTT';
@@ -111,6 +112,65 @@ export interface ValidationIssue {
   message: string;
 }
 
+// --- Event log (/api/events) -------------------------------------------------
+
+export type Severity = 'INFO' | 'WARNING' | 'CRITICAL';
+export type DeviceChange = 'name' | 'enabled' | 'config';
+
+/** data of each event type: the context copied when it happened. */
+export interface EventDataMap {
+  'device.created': { deviceName: string; protocol: Protocol; actorUsername: string };
+  'device.updated': {
+    deviceName: string;
+    previousName?: string;
+    changes: DeviceChange[];
+    enabled: boolean;
+    actorUsername: string;
+  };
+  'device.deleted': { deviceName: string; protocol: Protocol; actorUsername: string };
+  'device.status_changed': {
+    deviceName: string;
+    from: HealthStatus;
+    to: HealthStatus;
+    error?: string;
+  };
+  'line.fault_started': { deviceName: string; previousState: LineState };
+  'line.fault_cleared': { deviceName: string; state: LineState };
+  'user.created': { targetUsername: string; role: Role; actorUsername: string };
+  'user.role_changed': {
+    targetUsername: string;
+    previousRole: Role;
+    role: Role;
+    actorUsername: string;
+  };
+  'user.password_reset': { targetUsername: string; actorUsername: string };
+  'user.deleted': { targetUsername: string; role: Role; actorUsername: string };
+}
+
+export type KnownEventType = keyof EventDataMap;
+
+interface EventBase {
+  id: string;
+  ts: string;
+  severity: Severity;
+  /** null for events not about a device, and once the device is deleted. */
+  deviceId: string | null;
+}
+
+/** An event of a type this client knows, narrowed by `type`. */
+export type KnownEvent = {
+  [K in KnownEventType]: EventBase & { type: K; data: EventDataMap[K] };
+}[KnownEventType];
+
+/** As served: a newer backend may send types this client does not know. */
+export type EventDto = EventBase & { type: string; data: Record<string, unknown> };
+
+export interface EventPage {
+  items: EventDto[];
+  /** `before` of the next (older) page; null on the last one. */
+  nextCursor: string | null;
+}
+
 // --- SSE (/api/stream) --------------------------------------------------------
 
 export interface SnapshotDevice extends DeviceHealth {
@@ -138,6 +198,12 @@ export interface DeviceRemovedEvent {
   data: { deviceId: string };
 }
 
+/** A new entry of the event log (already filtered by role on the server). */
+export interface EventLogEvent {
+  type: 'event';
+  data: EventDto;
+}
+
 export interface HeartbeatEvent {
   type: 'heartbeat';
   data: { ts: string };
@@ -148,6 +214,7 @@ export type LiveEvent =
   | TelemetryEvent
   | StatusEvent
   | DeviceRemovedEvent
+  | EventLogEvent
   | HeartbeatEvent;
 
 // Sent only to the streams of the user they concern.
@@ -160,7 +227,7 @@ export interface SessionEndedEvent {
 
 export interface SessionChangedEvent {
   type: 'session-changed';
-  data: { changes: Array<'role' | 'password'> };
+  data: { changes: Array<'role' | 'password'>; role?: Role };
 }
 
 export type SessionEvent = SessionEndedEvent | SessionChangedEvent;
@@ -175,5 +242,6 @@ export const LIVE_EVENT_TYPES = [
   'telemetry',
   'status',
   'device-removed',
+  'event',
   'heartbeat',
 ] as const satisfies readonly LiveEvent['type'][];

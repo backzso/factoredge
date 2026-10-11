@@ -74,7 +74,7 @@ cd ../frontend && npm install && npm run dev    # http://localhost:5173
 
 **`users`:** id, username (unique), password_hash, role (ADMIN | ENGINEER | VIEWER)
 
-**`events`:** şemada var, kullanılmıyor
+**`events`:** id, ts, type (ör. `device.status_changed`), severity (INFO | WARNING | CRITICAL), device_id (SetNull), user_id (işlemi yapan, SetNull), data (jsonb, olay anının bağlamı), message (sadece İngilizce log yedeği). İndeksler: (ts, id) cursor için, (device_id, ts) cihaz filtresi için.
 
 **Canlı durum (bellekte, DB'de değil):** connection, connectedAt, lastSeenAt (= receivedAt), lastError, status (CONNECTING | ONLINE | STALE | OFFLINE | DISABLED)
 
@@ -140,6 +140,15 @@ cd ../frontend && npm install && npm run dev    # http://localhost:5173
   - Rol veya parola değişince `session-changed`
   - 30 sn'lik emniyet taraması ve JWT süresi dolunca akışı kapatma
   - Sekmeler arası çıkış/giriş: `BroadcastChannel`
+- **Olay kaydı (bonus):**
+  - Olay metin olarak değil, `type` + `data` olarak saklanıyor. Türkçe cümleyi frontend'de tek modül kuruyor (`features/events/eventText.ts`). Yeni bir dil ya da cümle değişikliği DB'ye dokunmuyor.
+  - `data` olay anının bağlamını kopyalıyor: `deviceName`, `actorUsername`, `targetUsername`, eski/yeni rol. Cihaz silinince `device_id` NULL oluyor ama olay anlamını koruyor; arayüz adı soluk ve "(silindi)" ile gösteriyor.
+  - Kurallar saf fonksiyon (`events/event-rules.ts`): CONNECTING hiç kaydedilmiyor ve "son yerleşik durum"u değiştirmiyor. Böylece OFFLINE → CONNECTING → ONLINE "geri geldi" oluyor, düzenleme sonrası ONLINE → CONNECTING → ONLINE hiçbir şey. İlk açılıştaki ilk durum kaydedilmiyor. Bantta sadece FAULT'a giriş (kritik) ve çıkış (bilgi).
+  - Canlı olaylar realtime bus'ı dinleyen bir `DeviceEventRecorder`'dan çıkıyor. DeviceHealth, Telemetry ve connector'lar olay kaydını bilmiyor; bağımlılık yönü `realtime ← events ← …` olarak kalıyor.
+  - Kayıt asenkron ve tek bir sırada yazılıyor. `ts` kayıt anında alınıyor ve süreç içinde kesin artıyor: aynı milisaniyedeki arıza giriş/çıkışı yer değiştirmiyor, DB ve canlı akış aynı sırayı görüyor. DB hatası loglanıyor, ana akış durmuyor. Yazımdan sonra olay `event` olarak yayınlanıyor.
+  - `user.*` olaylarını sadece ADMIN görüyor. Aynı `canSeeEvent()` hem `GET /api/events`'te hem SSE akışında. Akış rolü takip ediyor: `session-changed` artık yeni rolü taşıyor ve `user.role_changed` olayından önce gönderiliyor. Rol DB'de servis dışından değiştirilirse açık akış eski rolle süzmeye devam eder, ta ki yeniden açılana kadar.
+  - Sayfalama cursor tabanlı: opak `before` = base64url(ts|id), sıralama (ts, id) azalan. Aynı milisaniyedeki olaylar da atlanmıyor.
+  - Frontend: Olaylar sayfası (cihaz filtresi, "Daha fazla yükle") ve Panel altında "Son olaylar" (8). İkisi de SSE ile başa ekleniyor, yeniden bağlanınca yeniden çekiliyor.
 - **Graceful shutdown:** SSE akışları tamamlanır, boşta bağlantılar kapatılır, 3 sn sonra zorla kesilir, toplam süre 10 sn ile sınırlı.
 - **Simülatörler:**
   - Ortak, protokolden bağımsız fizik modülü. Gizli yük değişkeni L sinyalleri birbirine bağlar. Sıcaklık üstel yaklaşımla değişir. Durum makinesi: çalışıyor → durdu, %15 ihtimalle arıza.
@@ -217,7 +226,7 @@ En güçlü üçü: **2, 3 ve 6.**
 - **Kamera bonusu:** VM'de bir servis (ör. MediaPipe ile yüz ve göz noktaları; göz kapanma oranı, esneme, baş eğimi; kadrajda kişi yok) sadece sınıf + zamanı `factory/desk1/operator` topic'ine yayınlardı. Platformda yeni bir connector türü (factory'de bir `case`). Ham görüntü VM'den hiç çıkmazdı.
 - **Platformda MQTT status / LWT dinlemek:** Şu an Bant 2 simülatörü durunca kart STALE oluyor (broker bağlantısı sağlam). Bant 1 durunca OFFLINE. Status aboneliği + bir zod şemasıyla Bant 2 de OFFLINE olurdu.
 - **Bağlantı kopukken tampon:** MQTT QoS 1 + kalıcı oturum (`clean: false`) ya da simülatör tarafında kuyruk. Zemin hazır: (device_id, ts) birincil anahtarı + `skipDuplicates` tekrar gönderimde çift kayıt oluşturmaz, `seq` boşlukları gösterir.
-- **Olay kaydı** (tablo hazır), **eşik alarmı**, **verimlilik göstergesi.**
+- **Eşik alarmı**, **verimlilik göstergesi.**
 - **TimescaleDB hypertable** ve 60 dakikadan uzun aralıklar için **downsampling.**
 - **Backend'den makine tarafından okunabilir hata kodları** (`LAST_ADMIN` gibi). Şu an frontend sınırlı bir mesaj eşlemesi yapıyor.
 - **Parola sıfırlama eski token'ları geçersiz kılmıyor** → token sürümlemesi.
