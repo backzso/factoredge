@@ -1,4 +1,5 @@
 import type {
+  ActiveAlarm,
   AlarmEvent,
   Device,
   DeviceRemovedEvent,
@@ -77,17 +78,27 @@ export function applyTelemetryToLatest(
 /**
  * Status events are only sent when the status changes, so lastSeenAt is
  * advanced from every sample (the backend sets it to the sample's receivedAt).
+ * The sample's alarm (opened, new peak, cleared) is applied in the same step,
+ * so the card never shows a reading above the peak it belongs to.
  */
 export function applyTelemetryToDevices(
   devices: Devices,
   event: TelemetryEvent,
 ): DevicesUpdate {
-  const { deviceId, reading } = event.data;
+  const { deviceId, reading, alarm } = event.data;
   return updateDevice(devices, deviceId, (device) =>
-    device.health.lastSeenAt === reading.receivedAt
+    device.health.lastSeenAt === reading.receivedAt && sameAlarm(device.alarm, alarm)
       ? device
-      : { ...device, health: { ...device.health, lastSeenAt: reading.receivedAt } },
+      : {
+          ...device,
+          health: { ...device.health, lastSeenAt: reading.receivedAt },
+          alarm,
+        },
   );
+}
+
+function sameAlarm(a: ActiveAlarm | null, b: ActiveAlarm | null): boolean {
+  return a === b || (!!a && !!b && a.raisedAt === b.raisedAt && a.peakC === b.peakC);
 }
 
 export function applyStatusToDevices(

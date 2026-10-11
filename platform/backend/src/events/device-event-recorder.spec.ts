@@ -41,7 +41,7 @@ describe('DeviceEventRecorder', () => {
   const telemetry = (deviceId: string, state: LineState) =>
     realtime.publish({
       type: 'telemetry',
-      data: { deviceId, reading: reading(state) },
+      data: { deviceId, reading: reading(state), alarm: null },
     });
 
   it('records health transitions per device, with the device id', () => {

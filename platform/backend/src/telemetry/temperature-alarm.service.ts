@@ -25,8 +25,11 @@ export interface ActiveAlarm {
  * when the device's connector is restarted or the device is deleted, and after
  * a backend restart it is rebuilt from the incoming samples.
  *
- * Raising and clearing record an event (CRITICAL / INFO) and publish an
- * `alarm` live event; a new peak only publishes.
+ * Raising and clearing record an event (CRITICAL / INFO). The alarm state
+ * after a sample travels in that sample's `telemetry` live event (see
+ * TelemetryService.ingest), so a client always gets the reading and the peak
+ * it belongs to in one message. An `alarm` live event is published only when
+ * the alarm changes without a sample: when it is forgotten.
  */
 @Injectable()
 export class TemperatureAlarmService {
@@ -44,7 +47,8 @@ export class TemperatureAlarmService {
     };
   }
 
-  evaluate(deviceId: string, valueC: number, now: Date): void {
+  /** Applies one sample; returns the device's alarm after it. */
+  evaluate(deviceId: string, valueC: number, now: Date): ActiveAlarm | null {
     const previous = this.alarms.get(deviceId);
     const { state, change } = evaluateAlarm(
       previous,
@@ -52,14 +56,11 @@ export class TemperatureAlarmService {
       this.thresholds,
       now,
     );
-    if (!change) return;
-
     if (state) {
       this.alarms.set(deviceId, state);
     } else {
       this.alarms.delete(deviceId);
     }
-    this.publish(deviceId);
 
     const { raiseC, clearC } = this.thresholds;
     if (change === 'raised') {
@@ -83,6 +84,7 @@ export class TemperatureAlarmService {
         },
       });
     }
+    return this.get(deviceId);
   }
 
   get(deviceId: string): ActiveAlarm | null {
@@ -90,18 +92,14 @@ export class TemperatureAlarmService {
     return state ? this.toView(state) : null;
   }
 
-  /** Drops the device's alarm without an event (connector restart, device deleted). */
+  /**
+   * Drops the device's alarm without an event (connector restart, device
+   * deleted). No sample carries this change, so it is published on its own.
+   */
   forget(deviceId: string): void {
     if (this.alarms.delete(deviceId)) {
-      this.publish(deviceId);
+      this.realtime.publish({ type: 'alarm', data: { deviceId, alarm: null } });
     }
-  }
-
-  private publish(deviceId: string): void {
-    this.realtime.publish({
-      type: 'alarm',
-      data: { deviceId, alarm: this.get(deviceId) },
-    });
   }
 
   private toView(state: AlarmState): ActiveAlarm {

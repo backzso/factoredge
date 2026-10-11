@@ -57,8 +57,13 @@ export class TelemetryService {
 
     const reading = toReadingDto(row);
     this.latestByDevice.set(deviceId, reading);
-    this.realtime.publish({ type: 'telemetry', data: { deviceId, reading } });
-    this.alarms.evaluate(deviceId, sample.motorTempC, receivedAt);
+    // Evaluated first and sent in the same message: a client applies the
+    // reading and the alarm (peak) together and never shows one without the other.
+    const alarm = this.alarms.evaluate(deviceId, sample.motorTempC, receivedAt);
+    this.realtime.publish({
+      type: 'telemetry',
+      data: { deviceId, reading, alarm },
+    });
 
     // skipDuplicates: a re-sent sample (same device + ts) is ignored, not an error.
     this.prisma.reading

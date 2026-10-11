@@ -56,15 +56,13 @@ describe('TemperatureAlarmService', () => {
     ]);
   });
 
-  it('publishes the alarm on raise and new peak, and null on clear', () => {
-    [95, 101.4, 99, 84].forEach((value, i) =>
-      alarms.evaluate('d1', value, at(i)),
+  it('returns the alarm after each sample, for the telemetry event to carry; publishes nothing itself', () => {
+    const after = [95, 101.4, 99, 84].map(
+      (value, i) => alarms.evaluate('d1', value, at(i))?.peakC ?? null,
     );
 
-    const alarmEvents = published.flatMap((e) =>
-      e.type === 'alarm' ? [e.data.alarm?.peakC ?? null] : [],
-    );
-    expect(alarmEvents).toEqual([95, 101.4, null]);
+    expect(after).toEqual([95, 101.4, 101.4, null]);
+    expect(published).toEqual([]);
     expect(alarms.get('d1')).toBeNull();
   });
 

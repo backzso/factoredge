@@ -1,6 +1,13 @@
 import type { QueryClient } from '@tanstack/react-query';
 import { HISTORY_MINUTES, qk, RECENT_EVENTS_LIMIT } from '../api/queryKeys';
-import type { Device, EventDto, LatestReadings, LiveEvent, ReadingDto } from '../api/types';
+import type {
+  ActiveAlarm,
+  Device,
+  EventDto,
+  LatestReadings,
+  LiveEvent,
+  ReadingDto,
+} from '../api/types';
 import { notifyAlarm } from '../components/notify';
 import { alarmNotice } from './alarms';
 import {
@@ -38,13 +45,16 @@ export function applyLiveEvent(
       return;
     }
     case 'telemetry': {
-      const { deviceId, reading } = event.data;
+      const { deviceId, reading, alarm } = event.data;
+      const before = findDevice(queryClient, deviceId);
+      // Reading and alarm in one step: no render can fall between them.
       queryClient.setQueryData<LatestReadings>(qk.latest, (latest) =>
         applyTelemetryToLatest(latest, event),
       );
       updateDevices(queryClient, (devices) =>
         applyTelemetryToDevices(devices, event),
       );
+      notifyIfRaised(before, alarm);
       const readingsKey = qk.readings(deviceId, HISTORY_MINUTES);
       if (queryClient.getQueryData(readingsKey) !== undefined) {
         queryClient.setQueryData<ReadingDto[]>(readingsKey, (readings) =>
@@ -74,12 +84,9 @@ export function applyLiveEvent(
       return;
     }
     case 'alarm': {
-      const before = queryClient
-        .getQueryData<Device[]>(qk.devices)
-        ?.find((d) => d.id === event.data.deviceId);
+      const before = findDevice(queryClient, event.data.deviceId);
       updateDevices(queryClient, (devices) => applyAlarmToDevices(devices, event));
-      const notice = alarmNotice(before?.name, before?.alarm, event.data.alarm);
-      if (notice) notifyAlarm(notice.title, notice.message);
+      notifyIfRaised(before, event.data.alarm);
       return;
     }
     case 'event':
@@ -104,6 +111,16 @@ function prependToEventQueries(queryClient: QueryClient, event: EventDto): void 
       );
     }
   }
+}
+
+function findDevice(queryClient: QueryClient, deviceId: string): Device | undefined {
+  return queryClient.getQueryData<Device[]>(qk.devices)?.find((d) => d.id === deviceId);
+}
+
+/** One notification per newly raised alarm (see alarmNotice). */
+function notifyIfRaised(before: Device | undefined, alarm: ActiveAlarm | null): void {
+  const notice = alarmNotice(before?.name, before?.alarm, alarm);
+  if (notice) notifyAlarm(notice.title, notice.message);
 }
 
 function updateDevices(

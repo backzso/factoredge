@@ -122,9 +122,9 @@ describe('snapshot', () => {
 });
 
 describe('telemetry', () => {
-  const event = (deviceId: string, r: ReadingDto) => ({
+  const event = (deviceId: string, r: ReadingDto, alarm: ActiveAlarm | null = null) => ({
     type: 'telemetry' as const,
-    data: { deviceId, reading: r },
+    data: { deviceId, reading: r, alarm },
   });
 
   it('stores the latest reading per device', () => {
@@ -148,6 +148,19 @@ describe('telemetry', () => {
     const r = reading(0);
     const devices = [device('a', { lastSeenAt: r.receivedAt })];
     expect(applyTelemetryToDevices(devices, event('a', r)).devices).toBe(devices);
+  });
+
+  it("applies the sample's alarm with it: raised, new peak, cleared", () => {
+    const r = reading(0, { motorTempC: 101.4 });
+    const devices = [device('a', { lastSeenAt: r.receivedAt })];
+    const raised = applyTelemetryToDevices(devices, event('a', r, ALARM)).devices;
+    expect(raised?.[0]?.alarm).toEqual(ALARM);
+
+    const peak = { ...ALARM, peakC: 103.2 };
+    expect(applyTelemetryToDevices(raised, event('a', r, peak)).devices?.[0]?.alarm).toEqual(peak);
+    // Same alarm, same reading: nothing changed.
+    expect(applyTelemetryToDevices(raised, event('a', r, { ...ALARM })).devices).toBe(raised);
+    expect(applyTelemetryToDevices(raised, event('a', r, null)).devices?.[0]?.alarm).toBeNull();
   });
 
   it('flags an unknown device', () => {

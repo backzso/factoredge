@@ -315,8 +315,13 @@ describe('Event log (e2e)', () => {
       );
 
       sink.onTelemetry(sample(LineState.STOPPED, 85));
-      const cleared = await tab.waitFor('alarm');
-      expect(cleared.data).toEqual({ deviceId: id, alarm: null });
+      // The clearing sample carries the cleared alarm.
+      const cleared = await tab.waitFor('telemetry');
+      expect(cleared.data).toMatchObject({
+        deviceId: id,
+        reading: { motorTempC: 85 },
+        alarm: null,
+      });
 
       const alarmEvents = (await listEvents(admin.cookie, `?deviceId=${id}`))
         .filter((e) => e.type.startsWith('alarm.'))
@@ -351,6 +356,61 @@ describe('Event log (e2e)', () => {
         .set('Cookie', admin.cookie)
         .expect(200);
       expect(after.body.alarm).toBeNull();
+    });
+    it('never lets a client see a reading above the peak it knows: each telemetry message is consistent on its own', async () => {
+      const admin = await loginAs('admin', Role.ADMIN);
+      const { id, sink } = await createDevice(admin.cookie, 'Kiln');
+      sink.onConnection({ type: 'connected' });
+      const tab = await streamAs(admin.cookie);
+
+      const temps = [70, 95, 101.5, 104.2, 106.4, 99, 88, 84];
+      for (const temp of temps) {
+        sink.onTelemetry(sample(LineState.FAULT, temp));
+      }
+      // Wait for the last sample's telemetry, then a moment for anything
+      // published right after it (publishing is synchronous per sample).
+      const deadline = Date.now() + 3_000;
+      while (
+        !tab.events.some(
+          (e) =>
+            e.type === 'telemetry' &&
+            (e.data as { reading: { motorTempC: number } }).reading
+              .motorTempC === 84,
+        )
+      ) {
+        if (Date.now() > deadline) throw new Error('last sample not streamed');
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      // Replay the stream as the browser applies it, one message at a time.
+      // The UI may render between any two messages.
+      let peak: number | null = null;
+      const seen: number[] = [];
+      for (const event of tab.events) {
+        const data = event.data as {
+          deviceId?: string;
+          reading?: { motorTempC: number };
+          alarm?: { peakC: number } | null;
+        };
+        if (data?.deviceId !== id) continue;
+        if ('alarm' in data) peak = data.alarm?.peakC ?? null;
+        if (event.type === 'telemetry') {
+          const temp = data.reading!.motorTempC;
+          seen.push(temp);
+          if (temp >= 90) {
+            expect({ temp, peak }).toEqual({ temp, peak: expect.any(Number) });
+          }
+          if (peak !== null) {
+            expect({ temp, peakAtLeastTemp: peak >= temp }).toEqual({
+              temp,
+              peakAtLeastTemp: true,
+            });
+          }
+        }
+      }
+      expect(seen).toEqual(temps);
+      expect(peak).toBeNull();
     });
   });
 

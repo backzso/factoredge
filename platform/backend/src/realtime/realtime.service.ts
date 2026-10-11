@@ -9,10 +9,19 @@ import type { ActiveAlarm } from '../telemetry/temperature-alarm.service';
 // Shaped like Nest's MessageEvent: `type` becomes the SSE "event:" field, so the
 // browser can listen with addEventListener(type).
 export type RealtimeEvent =
-  | { type: 'telemetry'; data: { deviceId: string; reading: ReadingDto } }
+  // `alarm` is the device's temperature alarm after this reading.
+  | {
+      type: 'telemetry';
+      data: {
+        deviceId: string;
+        reading: ReadingDto;
+        alarm: ActiveAlarm | null;
+      };
+    }
   | { type: 'status'; data: { deviceId: string } & DeviceHealth }
   | { type: 'device-removed'; data: { deviceId: string } }
-  // Opened, new peak, or closed (alarm: null) motor temperature alarm.
+  // The alarm changed without a sample (dropped on connector restart or
+  // delete); changes caused by a sample travel in its telemetry event.
   | { type: 'alarm'; data: { deviceId: string; alarm: ActiveAlarm | null } }
   // A stored event (events/); streams pass it on only to users allowed to see it.
   | { type: 'event'; data: EventDto };

@@ -214,7 +214,8 @@ export interface SnapshotEvent {
 
 export interface TelemetryEvent {
   type: 'telemetry';
-  data: { deviceId: string; reading: ReadingDto };
+  /** `alarm`: the device's temperature alarm after this reading, applied together with it. */
+  data: { deviceId: string; reading: ReadingDto; alarm: ActiveAlarm | null };
 }
 
 export interface StatusEvent {
@@ -227,7 +228,10 @@ export interface DeviceRemovedEvent {
   data: { deviceId: string };
 }
 
-/** A temperature alarm opened, reached a new peak, or closed (alarm: null). */
+/**
+ * The alarm changed without a sample (dropped on a connector restart or delete).
+ * Changes caused by a sample arrive in its telemetry event.
+ */
 export interface AlarmEvent {
   type: 'alarm';
   data: { deviceId: string; alarm: ActiveAlarm | null };
