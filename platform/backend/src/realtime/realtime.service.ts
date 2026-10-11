@@ -4,6 +4,7 @@ import type { DeviceHealth } from '../device-health/device-health.service';
 import type { EventDto } from '../events/event-types';
 import type { Role } from '../generated/prisma/client';
 import type { ReadingDto } from '../telemetry/reading.mapper';
+import type { ActiveAlarm } from '../telemetry/temperature-alarm.service';
 
 // Shaped like Nest's MessageEvent: `type` becomes the SSE "event:" field, so the
 // browser can listen with addEventListener(type).
@@ -11,6 +12,8 @@ export type RealtimeEvent =
   | { type: 'telemetry'; data: { deviceId: string; reading: ReadingDto } }
   | { type: 'status'; data: { deviceId: string } & DeviceHealth }
   | { type: 'device-removed'; data: { deviceId: string } }
+  // Opened, new peak, or closed (alarm: null) motor temperature alarm.
+  | { type: 'alarm'; data: { deviceId: string; alarm: ActiveAlarm | null } }
   // A stored event (events/); streams pass it on only to users allowed to see it.
   | { type: 'event'; data: EventDto };
 

@@ -8,6 +8,7 @@ import {
   formatRelative,
   formatSignalValue,
   formatTemperature,
+  formatThreshold,
   formatTime,
   lineStateCode,
   lineStateFromCode,
@@ -25,6 +26,9 @@ describe('numbers (tr-TR)', () => {
     expect(formatTemperature(63.2)).toBe('63,2 °C');
     expect(formatTemperature(63)).toBe('63,0 °C');
     expect(formatTemperature(1063.25)).toBe('1.063,3 °C');
+    expect(formatThreshold(90)).toBe('90 °C');
+    expect(formatThreshold(87.5)).toBe('87,5 °C');
+    expect(formatThreshold(null)).toBe('—');
   });
 
   it('formats current with two decimals', () => {

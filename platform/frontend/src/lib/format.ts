@@ -38,6 +38,16 @@ export function formatTemperature(value: MaybeNumber): string {
   return isNumber(value) ? `${oneDecimalFormat.format(value)} °C` : EMPTY;
 }
 
+const upToOneDecimalFormat = new Intl.NumberFormat(LOCALE, {
+  maximumFractionDigits: 1,
+  signDisplay: 'negative',
+});
+
+/** A configured limit, without a needless decimal: 90 → "90 °C", 87.5 → "87,5 °C". */
+export function formatThreshold(value: MaybeNumber): string {
+  return isNumber(value) ? `${upToOneDecimalFormat.format(value)} °C` : EMPTY;
+}
+
 /** 13.8399 → "13,84 A". */
 export function formatCurrent(value: MaybeNumber): string {
   return isNumber(value) ? `${twoDecimalFormat.format(value)} A` : EMPTY;

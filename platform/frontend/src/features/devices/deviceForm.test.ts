@@ -28,6 +28,7 @@ function modbusDevice(registerMap: RegisterMapEntry[]): Device {
     id: 'd1',
     name: 'Hat 1',
     enabled: true,
+    alarm: null,
     createdAt: '2026-10-10T00:00:00.000Z',
     updatedAt: '2026-10-10T00:00:00.000Z',
     health: { status: 'ONLINE', lastSeenAt: null, lastError: null },

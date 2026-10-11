@@ -1,12 +1,16 @@
 import { Logger } from '@nestjs/common';
+import type { ConfigService } from '@nestjs/config';
+import type { EnvironmentVariables } from '../config/env.validation';
 import { DeviceHealthService } from '../device-health/device-health.service';
 import type { DeviceConfig } from '../devices/device-config.schema';
+import type { EventsService } from '../events/events.service';
 import type { PrismaService } from '../prisma/prisma.service';
 import {
   type RealtimeEvent,
   RealtimeService,
 } from '../realtime/realtime.service';
 import { TelemetryService } from '../telemetry/telemetry.service';
+import { TemperatureAlarmService } from '../telemetry/temperature-alarm.service';
 import { ConnectorManager } from './connector-manager.service';
 import type {
   Connector,
@@ -113,7 +117,14 @@ describe('ConnectorManager', () => {
     realtime.events$.subscribe((event) => events.push(event));
     const prismaService = prisma as unknown as PrismaService;
     health = new DeviceHealthService(realtime);
-    telemetry = new TelemetryService(prismaService, health, realtime);
+    const alarms = new TemperatureAlarmService(
+      {
+        get: (key: string) => (key === 'TEMP_ALARM_RAISE_C' ? 90 : 85),
+      } as unknown as ConfigService<EnvironmentVariables, true>,
+      realtime,
+      { record: () => undefined } as unknown as EventsService,
+    );
+    telemetry = new TelemetryService(prismaService, health, realtime, alarms);
     manager = new ConnectorManager(
       prismaService,
       telemetry,

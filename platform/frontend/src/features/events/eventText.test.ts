@@ -66,6 +66,23 @@ describe('describeEvent', () => {
       '“Bant 1” arızadan çıktı (Durdu).',
     ],
     [
+      'alarm.raised',
+      { deviceName: 'Bant 1', signal: 'motorTempC', valueC: 90.43, raiseC: 90, clearC: 85 },
+      '“Bant 1” yüksek motor sıcaklığı: 90,4 °C (eşik 90 °C).',
+    ],
+    [
+      'alarm.cleared',
+      {
+        deviceName: 'Bant 1',
+        signal: 'motorTempC',
+        valueC: 84.92,
+        peakC: 108.18,
+        clearC: 85,
+        raisedAt: '2026-10-11T10:00:00.000Z',
+      },
+      '“Bant 1” sıcaklık alarmı kapandı: 84,9 °C (tepe 108,2 °C).',
+    ],
+    [
       'user.created',
       { targetUsername: 'ayse', role: 'ENGINEER', actorUsername: 'admin' },
       'admin, “ayse” kullanıcısını ekledi (Mühendis).',

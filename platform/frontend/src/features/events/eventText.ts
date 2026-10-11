@@ -1,4 +1,5 @@
 import type { EventDto, KnownEvent, Severity } from '../../api/types';
+import { formatTemperature, formatThreshold } from '../../lib/format';
 import { HEALTH, LINE_STATE, PROTOCOL, ROLE_LABEL } from '../../lib/labels';
 
 // The one place where an event (type + data) becomes Turkish text. The backend
@@ -47,6 +48,10 @@ export function describeEvent(event: EventDto): string {
       return `${quoted(known.data.deviceName)} arızaya geçti.`;
     case 'line.fault_cleared':
       return `${quoted(known.data.deviceName)} arızadan çıktı (${labelOf(LINE_STATE, known.data.state)}).`;
+    case 'alarm.raised':
+      return `${quoted(known.data.deviceName)} yüksek motor sıcaklığı: ${formatTemperature(known.data.valueC)} (eşik ${formatThreshold(known.data.raiseC)}).`;
+    case 'alarm.cleared':
+      return `${quoted(known.data.deviceName)} sıcaklık alarmı kapandı: ${formatTemperature(known.data.valueC)} (tepe ${formatTemperature(known.data.peakC)}).`;
     case 'user.created':
       return `${actor}, ${quoted(known.data.targetUsername)} kullanıcısını ekledi (${labelOf(ROLE_LABEL, known.data.role)}).`;
     case 'user.role_changed':

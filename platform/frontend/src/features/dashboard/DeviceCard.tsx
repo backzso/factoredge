@@ -1,8 +1,13 @@
-import { Card, Group, SimpleGrid, Stack, Text } from '@mantine/core';
-import type { Device, ReadingDto } from '../../api/types';
+import { Box, Card, Group, SimpleGrid, Stack, Text } from '@mantine/core';
+import type { ActiveAlarm, Device, ReadingDto } from '../../api/types';
 import { HealthBadge, LineStateBadge, ProtocolBadge } from '../../components/badges';
 import { RelativeTime } from '../../components/RelativeTime';
-import { formatCount, formatCurrent, formatTemperature } from '../../lib/format';
+import {
+  formatCount,
+  formatCurrent,
+  formatTemperature,
+  formatThreshold,
+} from '../../lib/format';
 import { useShowingLastKnown } from '../../live/liveStatus';
 
 interface DeviceCardProps {
@@ -15,6 +20,7 @@ export function DeviceCard({ device, reading }: DeviceCardProps) {
   // Current values only while the device is online and the stream is live.
   const current = device.health.status === 'ONLINE' && !lastKnown;
   const fault = reading?.state === 'FAULT';
+  const alarm = device.alarm;
   // After a connector restart the backend reports lastSeenAt: null, but the last
   // reading is still known; its receivedAt is the same instant.
   const lastSeenAt = device.health.lastSeenAt ?? reading?.receivedAt ?? null;
@@ -24,7 +30,7 @@ export function DeviceCard({ device, reading }: DeviceCardProps) {
       withBorder
       padding="lg"
       style={
-        fault
+        fault || alarm
           ? { borderColor: 'var(--mantine-color-red-6)', borderWidth: 2 }
           : undefined
       }
@@ -43,6 +49,10 @@ export function DeviceCard({ device, reading }: DeviceCardProps) {
           {reading ? <LineStateBadge state={reading.state} /> : null}
         </div>
       </Group>
+
+      {alarm && (
+        <AlarmStrip alarm={alarm} valueC={reading?.motorTempC} current={current} />
+      )}
 
       {/* Not current: keep the last known values, dimmed. */}
       <SimpleGrid
@@ -67,6 +77,49 @@ export function DeviceCard({ device, reading }: DeviceCardProps) {
         </Text>
       )}
     </Card>
+  );
+}
+
+/**
+ * The open temperature alarm. Like the health badge, it is drawn faded and
+ * outlined, and says so, when it cannot be known to be current.
+ */
+function AlarmStrip({
+  alarm,
+  valueC,
+  current,
+}: {
+  alarm: ActiveAlarm;
+  valueC: number | undefined;
+  current: boolean;
+}) {
+  return (
+    <Box
+      role="alert"
+      mt="md"
+      px="sm"
+      py={6}
+      data-last-known={current ? undefined : true}
+      style={{
+        borderRadius: 'var(--mantine-radius-sm)',
+        ...(current
+          ? { background: 'var(--mantine-color-red-filled)', color: 'var(--mantine-color-white)' }
+          : {
+              border: '1px dashed var(--mantine-color-red-6)',
+              color: 'var(--mantine-color-red-6)',
+              opacity: 0.6,
+            }),
+      }}
+    >
+      <Text fw={700} size="sm" inherit>
+        Yüksek sıcaklık: {formatTemperature(valueC ?? alarm.peakC)} · eşik{' '}
+        {formatThreshold(alarm.raiseC)}
+      </Text>
+      <Text size="xs" inherit style={{ opacity: 0.9 }}>
+        Tepe {formatTemperature(alarm.peakC)} · <RelativeTime value={alarm.raisedAt} /> açıldı
+        {!current && ' · son bilinen'}
+      </Text>
+    </Box>
   );
 }
 

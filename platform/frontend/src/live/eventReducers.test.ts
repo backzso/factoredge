@@ -83,3 +83,16 @@ describe('applyLiveEvent: event', () => {
     expect(RECENT_EVENTS_LIMIT).toBe(8);
   });
 });
+
+describe('applyLiveEvent: device-removed', () => {
+  it('reloads the event lists, whose entries lose the device id', () => {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(qk.events(null), pages(['a']));
+    queryClient.setQueryData(qk.recentEvents, [event('a')]);
+
+    applyLiveEvent(queryClient, { type: 'device-removed', data: { deviceId: 'd1' } }, Date.now());
+
+    expect(queryClient.getQueryState(qk.events(null))?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(qk.recentEvents)?.isInvalidated).toBe(true);
+  });
+});

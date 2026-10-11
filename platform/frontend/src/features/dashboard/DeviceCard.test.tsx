@@ -2,7 +2,7 @@
 import { MantineProvider } from '@mantine/core';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { Device, ReadingDto } from '../../api/types';
+import type { ActiveAlarm, Device, ReadingDto } from '../../api/types';
 import { LiveStatusContext } from '../../live/liveStatus';
 import type { LiveStatus } from '../../live/useLiveStream';
 import { installDomShims } from '../../test/domSetup';
@@ -28,6 +28,7 @@ function device(status: Device['health']['status']): Device {
     updatedAt: '',
     config: { host: 'h', port: 5020, unitId: 1, pollIntervalMs: 1000, timeoutMs: 1000, registerMap: [] },
     health: { status, lastSeenAt: reading.receivedAt, lastError: null },
+    alarm: null,
   };
 }
 
@@ -78,5 +79,54 @@ describe('DeviceCard without a live connection', () => {
     expect(screen.queryByText(/son bilinen durum/)).toBeNull();
     // OFFLINE: values stay visible but dimmed (existing rule).
     expect(values().style.opacity).toBe('0.45');
+  });
+});
+
+describe('DeviceCard temperature alarm', () => {
+  beforeEach(() => installDomShims());
+  afterEach(() => cleanup());
+
+  const alarm: ActiveAlarm = {
+    signal: 'motorTempC',
+    raisedAt: '2026-10-10T07:59:00.000Z',
+    peakC: 104.25,
+    raiseC: 90,
+    clearC: 85,
+  };
+  const hot = (d: Device): Device => ({ ...d, alarm });
+  const hotReading: ReadingDto = { ...reading, motorTempC: 101.43, state: 'FAULT' };
+  const strip = () => screen.getByRole('alert');
+
+  function render2(live: LiveStatus, d: Device) {
+    render(
+      <MantineProvider>
+        <LiveStatusContext value={live}>
+          <DeviceCard device={d} reading={hotReading} />
+        </LiveStatusContext>
+      </MantineProvider>,
+    );
+  }
+
+  it('shows no strip without an alarm', () => {
+    render(ui('live', device('ONLINE')));
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('shows the current value, the threshold and the peak while live', () => {
+    render2('live', hot(device('ONLINE')));
+    expect(strip().textContent).toContain('Yüksek sıcaklık: 101,4 °C · eşik 90 °C');
+    expect(strip().textContent).toContain('Tepe 104,3 °C');
+    expect(strip().hasAttribute('data-last-known')).toBe(false);
+    expect(strip().textContent).not.toContain('son bilinen');
+  });
+
+  it('marks the alarm as last known without a live connection or when the device is not online', () => {
+    render2('reconnecting', hot(device('ONLINE')));
+    expect(strip().hasAttribute('data-last-known')).toBe(true);
+    expect(strip().textContent).toContain('son bilinen');
+    cleanup();
+
+    render2('live', hot(device('OFFLINE')));
+    expect(strip().hasAttribute('data-last-known')).toBe(true);
   });
 });

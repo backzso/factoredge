@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type {
+  ActiveAlarm,
   Device,
   DeviceHealth,
   LatestReadings,
@@ -8,6 +9,7 @@ import type {
 } from '../api/types';
 import {
   appendReading,
+  applyAlarmToDevices,
   applySnapshotToDevices,
   applySnapshotToLatest,
   applyStatusToDevices,
@@ -45,6 +47,7 @@ function device(id: string, health: Partial<DeviceHealth> = {}): Device {
     updatedAt: iso(0),
     config: { brokerUrl: 'mqtt://b:1883', topicPrefix: 'factory/x', staleAfterMs: 3000 },
     health: { status: 'CONNECTING', lastSeenAt: null, lastError: null, ...health },
+    alarm: null,
   };
 }
 
@@ -52,14 +55,28 @@ function snapshot(...devices: SnapshotEvent['data']['devices']): SnapshotEvent {
   return { type: 'snapshot', data: { devices } };
 }
 
-const live = (deviceId: string, latest: ReadingDto | null, health: Partial<DeviceHealth> = {}) => ({
+const live = (
+  deviceId: string,
+  latest: ReadingDto | null,
+  health: Partial<DeviceHealth> = {},
+  alarm: ActiveAlarm | null = null,
+) => ({
   deviceId,
   status: 'ONLINE' as const,
   lastSeenAt: latest?.receivedAt ?? null,
   lastError: null,
   latest,
+  alarm,
   ...health,
 });
+
+const ALARM: ActiveAlarm = {
+  signal: 'motorTempC',
+  raisedAt: iso(0),
+  peakC: 101.4,
+  raiseC: 90,
+  clearC: 85,
+};
 
 describe('snapshot', () => {
   it('seeds the health of listed devices and leaves the others alone', () => {
@@ -219,5 +236,36 @@ describe('device-removed', () => {
     expect(removeDeviceFromDevices(devices, removed('x'))).toBe(devices);
     expect(removeDeviceFromLatest(latest, removed('x'))).toBe(latest);
     expect(removeDeviceFromDevices(undefined, removed('x'))).toBeUndefined();
+  });
+});
+
+describe('alarm', () => {
+  it('sets and clears the alarm of a listed device', () => {
+    const devices = [device('a'), device('b')];
+    const raised = applyAlarmToDevices(devices, { type: 'alarm', data: { deviceId: 'a', alarm: ALARM } });
+    expect(raised.devices?.[0]?.alarm).toEqual(ALARM);
+    expect(raised.devices?.[1]).toBe(devices[1]);
+
+    const cleared = applyAlarmToDevices(raised.devices, {
+      type: 'alarm',
+      data: { deviceId: 'a', alarm: null },
+    });
+    expect(cleared.devices?.[0]?.alarm).toBeNull();
+  });
+
+  it("ignores an unknown device's alarm without asking for a refetch", () => {
+    const devices = [device('a')];
+    expect(
+      applyAlarmToDevices(devices, { type: 'alarm', data: { deviceId: 'gone', alarm: null } }),
+    ).toEqual({ devices, unknown: false });
+  });
+
+  it('takes the alarm from the snapshot, which is authoritative', () => {
+    const withStale = [{ ...device('a'), alarm: ALARM }, device('b')];
+    const { devices } = applySnapshotToDevices(
+      withStale,
+      snapshot(live('a', reading(0)), live('b', reading(0), {}, ALARM)),
+    );
+    expect(devices?.map((d) => d.alarm)).toEqual([null, ALARM]);
   });
 });

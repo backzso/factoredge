@@ -2,6 +2,7 @@ import { plainToInstance } from 'class-transformer';
 import {
   IsEnum,
   IsInt,
+  IsNumber,
   IsString,
   Matches,
   Max,
@@ -41,6 +42,20 @@ export class EnvironmentVariables {
 
   @IsEnum(NodeEnv)
   NODE_ENV: NodeEnv = NodeEnv.Development;
+
+  /** Motor temperature alarm: raised at or above this value (°C). */
+  @IsNumber(
+    { allowNaN: false, allowInfinity: false },
+    { message: 'TEMP_ALARM_RAISE_C must be a number (°C)' },
+  )
+  TEMP_ALARM_RAISE_C: number = 90;
+
+  /** ...and cleared only at or below this one; must be lower (hysteresis). */
+  @IsNumber(
+    { allowNaN: false, allowInfinity: false },
+    { message: 'TEMP_ALARM_CLEAR_C must be a number (°C)' },
+  )
+  TEMP_ALARM_CLEAR_C: number = 85;
 }
 
 /**
@@ -53,12 +68,19 @@ export function validateEnv(
   const env = plainToInstance(EnvironmentVariables, config, {
     enableImplicitConversion: true,
   });
-  const errors = validateSync(env);
-  if (errors.length > 0) {
-    const details = errors
-      .flatMap((error) => Object.values(error.constraints ?? {}))
-      .map((message) => `  - ${message}`)
-      .join('\n');
+  const messages = validateSync(env).flatMap((error) =>
+    Object.values(error.constraints ?? {}),
+  );
+  if (
+    messages.length === 0 &&
+    env.TEMP_ALARM_CLEAR_C >= env.TEMP_ALARM_RAISE_C
+  ) {
+    messages.push(
+      'TEMP_ALARM_CLEAR_C must be lower than TEMP_ALARM_RAISE_C (the alarm would flap)',
+    );
+  }
+  if (messages.length > 0) {
+    const details = messages.map((message) => `  - ${message}`).join('\n');
     throw new Error(`Invalid environment configuration:\n${details}`);
   }
   return env;

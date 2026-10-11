@@ -1,4 +1,5 @@
 import { Button, Center, Group, Paper, Select, Stack, Table, Text, Title } from '@mantine/core';
+import { useEffect } from 'react';
 import { useSearchParams } from 'react-router';
 import { useDevices } from '../../api/devices';
 import { useEvents } from '../../api/events';
@@ -27,6 +28,20 @@ export function EventsPage() {
       { replace: true },
     );
   };
+
+  // A filtered device that was deleted falls back to all devices.
+  useEffect(() => {
+    if (deviceId && devices.data && !devices.data.some((d) => d.id === deviceId)) {
+      setParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete('device');
+          return next;
+        },
+        { replace: true },
+      );
+    }
+  }, [deviceId, devices.data, setParams]);
 
   const deviceOptions = (devices.data ?? []).map((d) => ({ value: d.id, label: d.name }));
   const items = events.data?.pages.flatMap((page) => page.items) ?? [];

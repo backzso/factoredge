@@ -1,8 +1,11 @@
 import type { QueryClient } from '@tanstack/react-query';
 import { HISTORY_MINUTES, qk, RECENT_EVENTS_LIMIT } from '../api/queryKeys';
 import type { Device, EventDto, LatestReadings, LiveEvent, ReadingDto } from '../api/types';
+import { notifyAlarm } from '../components/notify';
+import { alarmNotice } from './alarms';
 import {
   appendReading,
+  applyAlarmToDevices,
   applySnapshotToDevices,
   applySnapshotToLatest,
   applyStatusToDevices,
@@ -66,6 +69,17 @@ export function applyLiveEvent(
       queryClient.removeQueries({
         queryKey: qk.deviceReadings(event.data.deviceId),
       });
+      // Its events stay but lose their device id (shown as deleted): reload them.
+      void queryClient.invalidateQueries({ queryKey: qk.allEvents });
+      return;
+    }
+    case 'alarm': {
+      const before = queryClient
+        .getQueryData<Device[]>(qk.devices)
+        ?.find((d) => d.id === event.data.deviceId);
+      updateDevices(queryClient, (devices) => applyAlarmToDevices(devices, event));
+      const notice = alarmNotice(before?.name, before?.alarm, event.data.alarm);
+      if (notice) notifyAlarm(notice.title, notice.message);
       return;
     }
     case 'event':

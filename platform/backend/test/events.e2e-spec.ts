@@ -283,6 +283,77 @@ describe('Event log (e2e)', () => {
     });
   });
 
+  describe('temperature alarm', () => {
+    it('raises at 90 °C, stays open above 85 °C, clears at 85 °C, with events and live state', async () => {
+      const admin = await loginAs('admin', Role.ADMIN);
+      const { id, sink } = await createDevice(admin.cookie, 'Oven');
+      sink.onConnection({ type: 'connected' });
+
+      sink.onTelemetry(sample(LineState.RUNNING, 70));
+      sink.onTelemetry(sample(LineState.FAULT, 95));
+      sink.onTelemetry(sample(LineState.FAULT, 101.5));
+      sink.onTelemetry(sample(LineState.STOPPED, 88)); // between the thresholds: still open
+
+      const device = await http()
+        .get(`/api/devices/${id}`)
+        .set('Cookie', admin.cookie)
+        .expect(200);
+      expect(device.body.alarm).toEqual({
+        signal: 'motorTempC',
+        raisedAt: expect.any(String),
+        peakC: 101.5,
+        raiseC: 90,
+        clearC: 85,
+      });
+      // A stream opened now gets the open alarm in its snapshot.
+      const tab = await streamAs(admin.cookie);
+      const snapshot = tab.events[0].data as {
+        devices: Array<{ deviceId: string; alarm: unknown }>;
+      };
+      expect(snapshot.devices.find((d) => d.deviceId === id)?.alarm).toEqual(
+        device.body.alarm,
+      );
+
+      sink.onTelemetry(sample(LineState.STOPPED, 85));
+      const cleared = await tab.waitFor('alarm');
+      expect(cleared.data).toEqual({ deviceId: id, alarm: null });
+
+      const alarmEvents = (await listEvents(admin.cookie, `?deviceId=${id}`))
+        .filter((e) => e.type.startsWith('alarm.'))
+        .reverse();
+      expect(alarmEvents.map((e) => [e.type, e.severity, e.data])).toEqual([
+        [
+          'alarm.raised',
+          EventSeverity.CRITICAL,
+          {
+            deviceName: 'Oven',
+            signal: 'motorTempC',
+            valueC: 95,
+            raiseC: 90,
+            clearC: 85,
+          },
+        ],
+        [
+          'alarm.cleared',
+          EventSeverity.INFO,
+          {
+            deviceName: 'Oven',
+            signal: 'motorTempC',
+            valueC: 85,
+            peakC: 101.5,
+            clearC: 85,
+            raisedAt: device.body.alarm.raisedAt,
+          },
+        ],
+      ]);
+      const after = await http()
+        .get(`/api/devices/${id}`)
+        .set('Cookie', admin.cookie)
+        .expect(200);
+      expect(after.body.alarm).toBeNull();
+    });
+  });
+
   describe('live stream', () => {
     it('sends user.* events only to admins, following a role change', async () => {
       const admin = await loginAs('admin', Role.ADMIN);

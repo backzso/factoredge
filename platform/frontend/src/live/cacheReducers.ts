@@ -1,4 +1,5 @@
 import type {
+  AlarmEvent,
   Device,
   DeviceRemovedEvent,
   LatestReadings,
@@ -40,6 +41,7 @@ export function applySnapshotToDevices(
         lastSeenAt: live.lastSeenAt,
         lastError: live.lastError,
       },
+      alarm: live.alarm ?? null,
     };
   });
   const unknown = event.data.devices.some((d) => !known.has(d.deviceId));
@@ -97,6 +99,16 @@ export function applyStatusToDevices(
     ...device,
     health: { status, lastSeenAt, lastError },
   }));
+}
+
+/**
+ * An alarm event for a device the list does not have is ignored: it is a
+ * deleted device's alarm being dropped, not a sign the list is out of date.
+ */
+export function applyAlarmToDevices(devices: Devices, event: AlarmEvent): DevicesUpdate {
+  const { deviceId, alarm } = event.data;
+  const result = updateDevice(devices, deviceId, (device) => ({ ...device, alarm }));
+  return { ...result, unknown: false };
 }
 
 export function removeDeviceFromDevices(

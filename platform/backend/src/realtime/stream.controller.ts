@@ -105,6 +105,7 @@ export class StreamController {
     const devices = this.health.snapshot().map((health) => ({
       ...health,
       latest: this.telemetry.latest(health.deviceId) ?? null,
+      alarm: this.telemetry.alarm(health.deviceId),
     }));
     return { type: 'snapshot', data: { devices } };
   }

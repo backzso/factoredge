@@ -188,6 +188,7 @@ describe('Devices, readings and stream (e2e)', () => {
         createdAt: expect.any(String),
         updatedAt: expect.any(String),
         health: { status: 'CONNECTING', lastSeenAt: null, lastError: null },
+        alarm: null,
       });
 
       const list = await http().get('/api/devices').set('Cookie', admin);

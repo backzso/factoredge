@@ -40,6 +40,21 @@ export interface EventDataMap {
   };
   'line.fault_started': { deviceName: string; previousState: LineState };
   'line.fault_cleared': { deviceName: string; state: LineState };
+  'alarm.raised': {
+    deviceName: string;
+    signal: 'motorTempC';
+    valueC: number;
+    raiseC: number;
+    clearC: number;
+  };
+  'alarm.cleared': {
+    deviceName: string;
+    signal: 'motorTempC';
+    valueC: number;
+    peakC: number;
+    clearC: number;
+    raisedAt: string;
+  };
   'user.created': { targetUsername: string; role: Role; actorUsername: string };
   'user.role_changed': {
     targetUsername: string;
@@ -113,6 +128,10 @@ export function describeEventEn(
       return `${device} entered FAULT`;
     case 'line.fault_cleared':
       return `${device} left FAULT (${String(data.state)})`;
+    case 'alarm.raised':
+      return `${device} motor temperature alarm: ${String(data.valueC)} C >= ${String(data.raiseC)} C`;
+    case 'alarm.cleared':
+      return `${device} motor temperature alarm cleared: ${String(data.valueC)} C <= ${String(data.clearC)} C (peak ${String(data.peakC)} C)`;
     case 'user.created':
       return `${actor} created user ${target} (${String(data.role)})`;
     case 'user.role_changed':

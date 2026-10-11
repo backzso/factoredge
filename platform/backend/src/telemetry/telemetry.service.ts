@@ -8,6 +8,10 @@ import { isForeignKeyViolation } from '../prisma/prisma-errors';
 import { PrismaService } from '../prisma/prisma.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { type ReadingDto, toReadingDto } from './reading.mapper';
+import {
+  type ActiveAlarm,
+  TemperatureAlarmService,
+} from './temperature-alarm.service';
 
 const readingSelect = {
   ts: true,
@@ -29,6 +33,7 @@ export class TelemetryService {
     private readonly prisma: PrismaService,
     private readonly health: DeviceHealthService,
     private readonly realtime: RealtimeService,
+    private readonly alarms: TemperatureAlarmService,
   ) {}
 
   /**
@@ -53,6 +58,7 @@ export class TelemetryService {
     const reading = toReadingDto(row);
     this.latestByDevice.set(deviceId, reading);
     this.realtime.publish({ type: 'telemetry', data: { deviceId, reading } });
+    this.alarms.evaluate(deviceId, sample.motorTempC, receivedAt);
 
     // skipDuplicates: a re-sent sample (same device + ts) is ignored, not an error.
     this.prisma.reading
@@ -71,8 +77,15 @@ export class TelemetryService {
     return this.latestByDevice.get(deviceId);
   }
 
+  /** The device's open temperature alarm, if any. */
+  alarm(deviceId: string): ActiveAlarm | null {
+    return this.alarms.get(deviceId);
+  }
+
+  /** Connector restarted or device deleted: drop the latest reading and the alarm. */
   forget(deviceId: string): void {
     this.latestByDevice.delete(deviceId);
+    this.alarms.forget(deviceId);
   }
 
   async findReadings(deviceId: string, minutes: number): Promise<ReadingDto[]> {

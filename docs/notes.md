@@ -76,7 +76,7 @@ cd ../frontend && npm install && npm run dev    # http://localhost:5173
 
 **`events`:** id, ts, type (ör. `device.status_changed`), severity (INFO | WARNING | CRITICAL), device_id (SetNull), user_id (işlemi yapan, SetNull), data (jsonb, olay anının bağlamı), message (sadece İngilizce log yedeği). İndeksler: (ts, id) cursor için, (device_id, ts) cihaz filtresi için.
 
-**Canlı durum (bellekte, DB'de değil):** connection, connectedAt, lastSeenAt (= receivedAt), lastError, status (CONNECTING | ONLINE | STALE | OFFLINE | DISABLED)
+**Canlı durum (bellekte, DB'de değil):** connection, connectedAt, lastSeenAt (= receivedAt), lastError, status (CONNECTING | ONLINE | STALE | OFFLINE | DISABLED), cihaz başına açık sıcaklık alarmı (raisedAt, peakC)
 
 **Ortak model (`TelemetrySample`):** ts, productionCount, scrapCount, motorTempC, motorCurrentA, state
 
@@ -149,6 +149,14 @@ cd ../frontend && npm install && npm run dev    # http://localhost:5173
   - `user.*` olaylarını sadece ADMIN görüyor. Aynı `canSeeEvent()` hem `GET /api/events`'te hem SSE akışında. Akış rolü takip ediyor: `session-changed` artık yeni rolü taşıyor ve `user.role_changed` olayından önce gönderiliyor. Rol DB'de servis dışından değiştirilirse açık akış eski rolle süzmeye devam eder, ta ki yeniden açılana kadar.
   - Sayfalama cursor tabanlı: opak `before` = base64url(ts|id), sıralama (ts, id) azalan. Aynı milisaniyedeki olaylar da atlanmıyor.
   - Frontend: Olaylar sayfası (cihaz filtresi, "Daha fazla yükle") ve Panel altında "Son olaylar" (8). İkisi de SSE ile başa ekleniyor, yeniden bağlanınca yeniden çekiliyor.
+- **Eşik alarmı (bonus):**
+  - Motor sıcaklığı backend'de, her okuma işlenirken değerlendiriliyor (connector'da değil). Saf histerezis fonksiyonu (`telemetry/temperature-alarm.ts`): ≥ 90 °C açılır, ancak ≤ 85 °C kapanır, arada mevcut durum korunur. Eşik etrafında dalgalanan değer alarmı açıp kapatmıyor.
+  - Eşikler env'den (`TEMP_ALARM_RAISE_C`, `TEMP_ALARM_CLEAR_C`, varsayılan 90/85). Başlangıçta doğrulanıyor: `clear < raise` değilse backend açılmıyor.
+  - Durum cihaz başına bellekte. Connector yeniden uzlaştırılınca (düzenleme) ve cihaz silinince olaysız unutuluyor. Sıcaklık hâlâ yüksekse sonraki okumada yeni bir alarm açılıyor.
+  - **Backend yeniden başlarsa** alarm durumu boş başlıyor ve gelen veriden yeniden hesaplanıyor: ilk okuma ≥ 90 ise yeni bir alarm (ve olay) açılıyor. 85–90 arasındaki bir değer, yeniden başlamadan önce açık olan alarmı geri getirmiyor.
+  - Açılış CRITICAL, kapanış INFO olay (tepe değer ve açılış zamanıyla). Yeni tepe değer sadece canlı `alarm` olayı, kayıt yok.
+  - Aktif alarm snapshot'ta, `GET /api/devices`'ta ve canlı `alarm` olayında (açılış zamanı, tepe, eşikler).
+  - Frontend: kartta kırmızı şerit ("Yüksek sıcaklık: 101,4 °C · eşik 90 °C", altında tepe ve açılış). Bildirim sadece yeni bir `raisedAt` için çıkıyor: tepe güncellemesi ya da yeniden bağlanmadaki snapshot tekrar bildirim üretmiyor. Bağlantı canlı değilken ya da cihaz çevrimiçi değilken şerit soluk, kesik çerçeveli ve "son bilinen" ibareli.
 - **Graceful shutdown:** SSE akışları tamamlanır, boşta bağlantılar kapatılır, 3 sn sonra zorla kesilir, toplam süre 10 sn ile sınırlı.
 - **Simülatörler:**
   - Ortak, protokolden bağımsız fizik modülü. Gizli yük değişkeni L sinyalleri birbirine bağlar. Sıcaklık üstel yaklaşımla değişir. Durum makinesi: çalışıyor → durdu, %15 ihtimalle arıza.
@@ -226,7 +234,7 @@ En güçlü üçü: **2, 3 ve 6.**
 - **Kamera bonusu:** VM'de bir servis (ör. MediaPipe ile yüz ve göz noktaları; göz kapanma oranı, esneme, baş eğimi; kadrajda kişi yok) sadece sınıf + zamanı `factory/desk1/operator` topic'ine yayınlardı. Platformda yeni bir connector türü (factory'de bir `case`). Ham görüntü VM'den hiç çıkmazdı.
 - **Platformda MQTT status / LWT dinlemek:** Şu an Bant 2 simülatörü durunca kart STALE oluyor (broker bağlantısı sağlam). Bant 1 durunca OFFLINE. Status aboneliği + bir zod şemasıyla Bant 2 de OFFLINE olurdu.
 - **Bağlantı kopukken tampon:** MQTT QoS 1 + kalıcı oturum (`clean: false`) ya da simülatör tarafında kuyruk. Zemin hazır: (device_id, ts) birincil anahtarı + `skipDuplicates` tekrar gönderimde çift kayıt oluşturmaz, `seq` boşlukları gösterir.
-- **Eşik alarmı**, **verimlilik göstergesi.**
+- **Verimlilik göstergesi.**
 - **TimescaleDB hypertable** ve 60 dakikadan uzun aralıklar için **downsampling.**
 - **Backend'den makine tarafından okunabilir hata kodları** (`LAST_ADMIN` gibi). Şu an frontend sınırlı bir mesaj eşlemesi yapıyor.
 - **Parola sıfırlama eski token'ları geçersiz kılmıyor** → token sürümlemesi.

@@ -4,6 +4,7 @@
 // - devices/device-config.schema.ts ModbusConfig, MqttConfig, DEVICE_TEMPLATES
 // - device-health/*                 DeviceHealth, DeviceStatus
 // - telemetry/reading.mapper.ts     ReadingDto
+// - telemetry/temperature-alarm.service.ts ActiveAlarm
 // - realtime/*                      SSE events
 // - events/event-types.ts           EventDto and the data of each event type
 
@@ -78,6 +79,17 @@ export interface DeviceHealth {
   lastError: string | null;
 }
 
+/** An open motor temperature alarm (hysteresis: raised at raiseC, cleared at clearC). */
+export interface ActiveAlarm {
+  signal: 'motorTempC';
+  /** When it was raised (ISO). */
+  raisedAt: string;
+  /** Highest value since then. */
+  peakC: number;
+  raiseC: number;
+  clearC: number;
+}
+
 interface DeviceBase {
   id: string;
   name: string;
@@ -85,6 +97,7 @@ interface DeviceBase {
   createdAt: string;
   updatedAt: string;
   health: DeviceHealth;
+  alarm: ActiveAlarm | null;
 }
 
 export type Device =
@@ -136,6 +149,21 @@ export interface EventDataMap {
   };
   'line.fault_started': { deviceName: string; previousState: LineState };
   'line.fault_cleared': { deviceName: string; state: LineState };
+  'alarm.raised': {
+    deviceName: string;
+    signal: 'motorTempC';
+    valueC: number;
+    raiseC: number;
+    clearC: number;
+  };
+  'alarm.cleared': {
+    deviceName: string;
+    signal: 'motorTempC';
+    valueC: number;
+    peakC: number;
+    clearC: number;
+    raisedAt: string;
+  };
   'user.created': { targetUsername: string; role: Role; actorUsername: string };
   'user.role_changed': {
     targetUsername: string;
@@ -176,6 +204,7 @@ export interface EventPage {
 export interface SnapshotDevice extends DeviceHealth {
   deviceId: string;
   latest: ReadingDto | null;
+  alarm: ActiveAlarm | null;
 }
 
 export interface SnapshotEvent {
@@ -198,6 +227,12 @@ export interface DeviceRemovedEvent {
   data: { deviceId: string };
 }
 
+/** A temperature alarm opened, reached a new peak, or closed (alarm: null). */
+export interface AlarmEvent {
+  type: 'alarm';
+  data: { deviceId: string; alarm: ActiveAlarm | null };
+}
+
 /** A new entry of the event log (already filtered by role on the server). */
 export interface EventLogEvent {
   type: 'event';
@@ -214,6 +249,7 @@ export type LiveEvent =
   | TelemetryEvent
   | StatusEvent
   | DeviceRemovedEvent
+  | AlarmEvent
   | EventLogEvent
   | HeartbeatEvent;
 
@@ -242,6 +278,7 @@ export const LIVE_EVENT_TYPES = [
   'telemetry',
   'status',
   'device-removed',
+  'alarm',
   'event',
   'heartbeat',
 ] as const satisfies readonly LiveEvent['type'][];

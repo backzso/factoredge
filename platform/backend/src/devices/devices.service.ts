@@ -17,6 +17,8 @@ import { EventsService } from '../events/events.service';
 import { EventSeverity, Prisma, Protocol } from '../generated/prisma/client';
 import { isRecordNotFound, isUniqueViolation } from '../prisma/prisma-errors';
 import { PrismaService } from '../prisma/prisma.service';
+import { TelemetryService } from '../telemetry/telemetry.service';
+import type { ActiveAlarm } from '../telemetry/temperature-alarm.service';
 import type { AuthUser } from '../users/user.select';
 import {
   DEVICE_TEMPLATES,
@@ -38,7 +40,10 @@ const deviceSelect = {
 
 type DeviceRow = Prisma.DeviceGetPayload<{ select: typeof deviceSelect }>;
 
-export type DeviceView = DeviceRow & { health: DeviceHealth };
+export type DeviceView = DeviceRow & {
+  health: DeviceHealth;
+  alarm: ActiveAlarm | null;
+};
 
 @Injectable()
 export class DevicesService {
@@ -47,6 +52,7 @@ export class DevicesService {
     private readonly connectors: ConnectorManager,
     private readonly health: DeviceHealthService,
     private readonly events: EventsService,
+    private readonly telemetry: TelemetryService,
   ) {}
 
   async findAll(): Promise<DeviceView[]> {
@@ -188,6 +194,7 @@ export class DevicesService {
     return {
       ...row,
       health: this.health.get(row.id) ?? pendingHealth(row.enabled),
+      alarm: this.telemetry.alarm(row.id),
     };
   }
 }
@@ -195,10 +202,10 @@ export class DevicesService {
 /**
  * The connector is (re)started in the background after the response, so a
  * freshly saved device reports CONNECTING (or DISABLED) rather than the status
- * of the connector being replaced.
+ * of the connector being replaced. The restart also drops the alarm.
  */
 function withPendingHealth(row: DeviceRow): DeviceView {
-  return { ...row, health: pendingHealth(row.enabled) };
+  return { ...row, health: pendingHealth(row.enabled), alarm: null };
 }
 
 function pendingHealth(enabled: boolean): DeviceHealth {

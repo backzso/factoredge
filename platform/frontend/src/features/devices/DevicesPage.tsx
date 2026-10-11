@@ -91,7 +91,7 @@ export function DevicesPage() {
         <QueryError error={devices.error} onRetry={() => void devices.refetch()} />
       ) : devices.data.length === 0 ? (
         <EmptyState title="Henüz cihaz yok">
-          {canManage ? '"Cihaz ekle" ile ilk bandı tanımlayın.' : 'Bir yönetici cihaz eklediğinde burada görünecek.'}
+          {canManage ? '"Cihaz ekle" ile ilk bandı tanımlayın.' : 'Bir yönetici ya da mühendis cihaz eklediğinde burada görünecek.'}
         </EmptyState>
       ) : (
         <Table.ScrollContainer minWidth={900}>
