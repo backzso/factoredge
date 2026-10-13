@@ -123,7 +123,7 @@ cd ../frontend && npm install && npm run dev    # http://localhost:5173
 - `passwordHash` beyaz liste `select` ile hiç çekilmez (kara liste değil).
 - Login'de kullanıcı yoksa bile sahte hash ile karşılaştırma: zamanlama farkından kullanıcı adı tahmin edilemez. İki hatalı girişin yanıtı bayt bayt aynı.
 - Son admin koruması: `SELECT … ORDER BY id FOR UPDATE` (kötümser kilit, sıralı kilitleme ile deadlock yok).
-- **Mühendis rolü (bonus):** Cihaz ekleme/düzenleme/silme ADMIN + ENGINEER (`@Roles(Role.ADMIN, Role.ENGINEER)`), kullanıcı yönetimi sadece ADMIN, okuma herkes. ENGINEER admin sayılmaz: son admini mühendise düşürmek de 409. Frontend'de izinler tek yerde, rol → izin tablosu (`ROLE_PERMISSIONS`, `api/auth.ts`); menü, butonlar ve `RequireCan` buradan okur. Enum'a değer eklemek tek satırlık migration (`ALTER TYPE … ADD VALUE`).
+- **Mühendis rolü (bonus):** Cihaz ekleme/düzenleme ADMIN + ENGINEER (`@Roles(Role.ADMIN, Role.ENGINEER)`); cihaz silme sadece ADMIN (case Mühendis'e "ekleme ve düzenleme" diyor; silme okuma geçmişini de cascade ile sildiği için geri alınamaz); kullanıcı yönetimi sadece ADMIN, okuma herkes. Frontend'de ayrı `deleteDevices` izni, sadece ADMIN'de. ENGINEER admin sayılmaz: son admini mühendise düşürmek de 409. Frontend'de izinler tek yerde, rol → izin tablosu (`ROLE_PERMISSIONS`, `api/auth.ts`); menü, butonlar ve `RequireCan` buradan okur. Enum'a değer eklemek tek satırlık migration (`ALTER TYPE … ADD VALUE`).
 
 **Diğer kararlar:**
 - **Sağlık:** bağlantı + tazelik. Eşik = beklenen aralık × 3 (Modbus `pollIntervalMs × 3`, MQTT 3 sn). İlk veri için tanınan süre var. OFFLINE'dayken gelen `connecting` durumu değiştirmez (yanıp sönme yok).

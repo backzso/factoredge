@@ -2,7 +2,7 @@
 
 İki üretim bandını tek bir web arayüzünden izleyen ve yöneten platform. Bant 1 verisini **Modbus TCP**, Bant 2 **MQTT** ile veriyor. Veri kaynakları sanal makinede, platform (backend, veritabanı, arayüz) host bilgisayarda çalışıyor.
 
-**Durum:** Zorunlu kapsamın beş maddesi çalışıyor. Bonuslardan otomatik testler, mühendis rolü, olay kaydı ve eşik alarmı var (bkz. [Bonuslar](#6-bonuslar)). Diğer bonuslar bilinçli olarak yapılmadı (bkz. [Bilerek yapmadıklarım](#7-bilerek-yapmadıklarım)).
+**Durum:** Zorunlu kapsamın beş maddesi çalışıyor. Bonuslardan otomatik testler, mühendis rolü, olay kaydı ve eşik alarmı var (bkz. [Bonuslar](#6-bonuslar)). **Yapılmayan bonuslar:** görüntü sınıflandırma (kamera), verimlilik göstergesi ve bağlantı koptuğunda veri tamponu. Üçü de bilinçli olarak bırakıldı; nedenleri ve nasıl yapılacakları [Bilerek yapmadıklarım](#7-bilerek-yapmadıklarım) bölümünde.
 
 ---
 
@@ -52,25 +52,30 @@ npm run dev                   # http://localhost:5173
 
 Veritabanı boş başlar. Yönetici olarak giriş yapıp **Cihazlar → Cihaz ekle** ile iki bandı ekleyin:
 
-| Cihaz | Protokol | Ayarlar |
-|---|---|---|
+| Cihaz  | Protokol   | Ayarlar                                                                                   |
+| ------ | ---------- | ----------------------------------------------------------------------------------------- |
 | Bant 1 | Modbus TCP | host = VM IP, port 5020, unit id 1. Register haritası dokümandaki değerlerle hazır gelir. |
-| Bant 2 | MQTT | broker `mqtt://<VM IP>:1883`, topic ön eki `factory/line2` |
+| Bant 2 | MQTT       | broker `mqtt://<VM IP>:1883`, topic ön eki `factory/line2`                                |
 
 ### Testler
 
-| Yer | Komut | Test | Neyi test ediyor |
-|---|---|---|---|
-| `vm/simulators` | `npm test` | 33 | Fizik modeli, register encoder (altın değerler), durum kaydı |
-| `platform/backend` | `npm test` | 127 | Register decoder, sağlık durumu hesabı, connector yaşam döngüsü, config doğrulama, olay kuralları (hangi geçiş kaydedilir, hangisi kaydedilmez), alarm histerezisi ve eşik doğrulaması |
-| `platform/backend` | `npm run test:e2e` | 53 | Yetki (401/403, mühendis yetkileri), cihaz API, son admin koruması, oturum olayları, olay kaydı (rol filtresi REST'te ve canlı akışta, sayfalama, silinen cihazın olayları), alarm → olay, SSE varken kapanış |
-| `platform/frontend` | `npm test` | 149 | SSE → cache reducer'ları, biçimlendirme, form hata eşleme, oturum akışı, rol → izin tablosu, olay → Türkçe cümle, alarm şeridi ve bildirimi |
+| Yer                 | Komut              | Test | Neyi test ediyor                                                                                                                                                                                              |
+| ------------------- | ------------------ | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `vm/simulators`     | `npm test`         | 33   | Fizik modeli, register encoder (altın değerler), durum kaydı                                                                                                                                                  |
+| `platform/backend`  | `npm test`         | 127  | Register decoder, sağlık durumu hesabı, connector yaşam döngüsü, config doğrulama, olay kuralları (hangi geçiş kaydedilir, hangisi kaydedilmez), alarm histerezisi ve eşik doğrulaması                        |
+| `platform/backend`  | `npm run test:e2e` | 55   | Yetki (401/403, mühendis yetkileri), cihaz API, son admin koruması, oturum olayları, olay kaydı (rol filtresi REST'te ve canlı akışta, sayfalama, silinen cihazın olayları), alarm → olay, SSE varken kapanış |
+| `platform/frontend` | `npm test`         | 153  | SSE → cache reducer'ları, biçimlendirme, form hata eşleme, oturum akışı, rol → izin tablosu, olay → Türkçe cümle, alarm şeridi ve bildirimi                                                                   |
 
 e2e testleri ayrı bir `factoredge_test` veritabanı kullanır. Veritabanı adı `_test` ile bitmiyorsa testler başlamaz.
 
 ---
 
 ## 2. Mimari
+
+![FactorEdge mimarisi](docs/mimari.svg)
+
+<details>
+<summary>Metin hali (terminal için)</summary>
 
 ```
 ┌──────────────── Sanal makine (Multipass) ────────────────┐
@@ -96,6 +101,8 @@ e2e testleri ayrı bir `factoredge_test` veritabanı kullanır. Veritabanı adı
                   React + TanStack Query :5173
 ```
 
+</details>
+
 ### Bileşenler
 
 - **Simülatörler (`vm/simulators`):** Tek TypeScript paketi, iki giriş noktası.
@@ -111,24 +118,24 @@ e2e testleri ayrı bir `factoredge_test` veritabanı kullanır. Veritabanı adı
 
 ### Kesinti davranışı
 
-| Olay | Arayüzde |
-|---|---|
-| Bant 1 simülatörü durur | Hemen **Bağlantı yok**, son değerler soluk ve "son bilinen" olarak durur |
-| Bant 2 simülatörü durur | ~3 sn sonra **Veri yok** (broker bağlantısı sağlam, veri gelmiyor) |
-| Broker durur | Bant 2 **Bağlantı yok**, Bant 1 etkilenmez |
-| Kaynak geri gelir | Kendiliğinden **Çevrimiçi** (Modbus yeniden denemesi en fazla 10 sn) |
-| Backend durur | Üstte "Yeniden bağlanıyor", kartlar soluk; backend gelince kendiliğinden düzelir |
+| Olay                    | Arayüzde                                                                         |
+| ----------------------- | -------------------------------------------------------------------------------- |
+| Bant 1 simülatörü durur | Hemen **Bağlantı yok**, son değerler soluk ve "son bilinen" olarak durur         |
+| Bant 2 simülatörü durur | ~3 sn sonra **Veri yok** (broker bağlantısı sağlam, veri gelmiyor)               |
+| Broker durur            | Bant 2 **Bağlantı yok**, Bant 1 etkilenmez                                       |
+| Kaynak geri gelir       | Kendiliğinden **Çevrimiçi** (Modbus yeniden denemesi en fazla 10 sn)             |
+| Backend durur           | Üstte "Yeniden bağlanıyor", kartlar soluk; backend gelince kendiliğinden düzelir |
 
 ---
 
 ## 3. Veri modeli
 
-| Tablo | Alanlar | Not |
-|---|---|---|
-| `devices` | id, name (benzersiz), protocol (`MODBUS`/`MQTT`), config (jsonb), enabled | `config` protokole göre farklı şekilde; uygulamada zod ile doğrulanır |
-| `readings` | device_id, ts, received_at, production_count, scrap_count, motor_temp_c, motor_current_a, state | Birincil anahtar (device_id, ts). Cihaz silinince okumalar da silinir |
-| `users` | id, username (benzersiz), password_hash, role (`ADMIN`/`ENGINEER`/`VIEWER`) | |
-| `events` | id, ts, type, severity (`INFO`/`WARNING`/`CRITICAL`), device_id, user_id, data (jsonb), message | Olay metin olarak değil, type + data olarak saklanır. `data` olay anının bağlamını kopyalar (cihaz adı, işlemi yapan kullanıcı). Cihaz silinince olaylar kalır, `device_id` boşalır. `message` sadece İngilizce log satırı |
+| Tablo      | Alanlar                                                                                         | Not                                                                                                                                                                                                                        |
+| ---------- | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `devices`  | id, name (benzersiz), protocol (`MODBUS`/`MQTT`), config (jsonb), enabled                       | `config` protokole göre farklı şekilde; uygulamada zod ile doğrulanır                                                                                                                                                      |
+| `readings` | device_id, ts, received_at, production_count, scrap_count, motor_temp_c, motor_current_a, state | Birincil anahtar (device_id, ts). Cihaz silinince okumalar da silinir                                                                                                                                                      |
+| `users`    | id, username (benzersiz), password_hash, role (`ADMIN`/`ENGINEER`/`VIEWER`)                     |                                                                                                                                                                                                                            |
+| `events`   | id, ts, type, severity (`INFO`/`WARNING`/`CRITICAL`), device_id, user_id, data (jsonb), message | Olay metin olarak değil, type + data olarak saklanır. `data` olay anının bağlamını kopyalar (cihaz adı, işlemi yapan kullanıcı). Cihaz silinince olaylar kalır, `device_id` boşalır. `message` sadece İngilizce log satırı |
 
 - **İki bant aynı modelde:** Her connector kendi protokolünü ortak bir okumaya çevirir: `ts, productionCount, scrapCount, motorTempC, motorCurrentA, state`. Bandın durumu Modbus'ta 0/1/2, MQTT'de metin olarak gelir; ikisi de `RUNNING`/`STOPPED`/`FAULT`'a çevrilir.
 - **İki zaman damgası:** `ts` ölçüm anı (MQTT'de mesajdan, Modbus'ta okuma anı). `received_at` platformun veriyi aldığı an.
@@ -139,24 +146,24 @@ e2e testleri ayrı bir `factoredge_test` veritabanı kullanır. Veritabanı adı
 
 Dokümandaki adresler 1 tabanlı geleneksel gösterim. Protokolde offset 0 tabanlı:
 
-| Doküman | Okuma | Çözümleme |
-|---|---|---|
-| 30001–30002 | FC04, offset 0–1 | uint32, ABCD: `üst × 65536 + alt` |
+| Doküman     | Okuma            | Çözümleme                                                   |
+| ----------- | ---------------- | ----------------------------------------------------------- |
+| 30001–30002 | FC04, offset 0–1 | uint32, ABCD: `üst × 65536 + alt`                           |
 | 30003–30004 | FC04, offset 2–3 | float32, CDAB: önce word'ler yer değiştirir, sonra IEEE 754 |
-| 30010 | FC04, offset 9 | int16 (iki tümleyen) × 0,01 |
-| 30020 | FC04, offset 19 | uint16 |
-| 40001 | FC03, offset 0 | 0 durdu · 1 çalışıyor · 2 arıza |
+| 30010       | FC04, offset 9   | int16 (iki tümleyen) × 0,01                                 |
+| 30020       | FC04, offset 19  | uint16                                                      |
+| 40001       | FC03, offset 0   | 0 durdu · 1 çalışıyor · 2 arıza                             |
 
 Input register'lar tek bir FC04 isteğiyle (offset 0–19) okunur.
 
 **Encoder (simülatör) ve decoder (platform) kod paylaşmıyor.** İkisi de elle hesaplanmış aynı altın değerlerle test ediliyor:
 
-| Değer | Beklenen register'lar |
-|---|---|
-| 123456789 | `[1883, 52501]` |
-| 72,5 °C | `[0, 17041]` |
-| 12,34 A | `1234` |
-| −12,34 A | `64302` |
+| Değer     | Beklenen register'lar |
+| --------- | --------------------- |
+| 123456789 | `[1883, 52501]`       |
+| 72,5 °C   | `[0, 17041]`          |
+| 12,34 A   | `1234`                |
+| −12,34 A  | `64302`               |
 
 Kod paylaşsalardı, iki tarafta aynı şekilde yapılan bir hata "doğru" görünürdü.
 
@@ -164,11 +171,11 @@ Kod paylaşsalardı, iki tarafta aynı şekilde yapılan bir hata "doğru" gör�
 
 ## 4. MQTT topic şeması ve mesaj biçimi
 
-| Topic | İçerik |
-|---|---|
-| `factory/line2/telemetry` | Saniyede bir, tüm sinyaller tek mesajda, QoS 1 |
-| `factory/line2/status` | `online` / `offline`, retained. Last Will = `offline` |
-| `factory/line2/command` | Demo kontrolü: `{"setState":"running\|stopped\|fault"}` |
+| Topic                     | İçerik                                                  |
+| ------------------------- | ------------------------------------------------------- |
+| `factory/line2/telemetry` | Saniyede bir, tüm sinyaller tek mesajda, QoS 1          |
+| `factory/line2/status`    | `online` / `offline`, retained. Last Will = `offline`   |
+| `factory/line2/command`   | Demo kontrolü: `{"setState":"running\|stopped\|fault"}` |
 
 Telemetri mesajı:
 
@@ -204,7 +211,7 @@ Platform şu an sadece `telemetry` topic'ini dinliyor. `status` için bkz. [Bile
 
 **Bedeli:** Her işlemde fazladan bir DB okuması. Bu ölçekte önemsiz.
 
-Yan etkisi: Connector'lar sadece bir config ve bir "sink" alıyor. Yeni bir protokol eklemek yeni bir connector sınıfı, bir doğrulama şeması ve factory'de bir satır demek. Geri kalan hiçbir katman değişmiyor.
+Yan etkisi: Connector'lar sadece bir config ve bir "sink" alıyor. Yeni bir protokol eklemek; bir connector sınıfı, bir config şeması, factory’de bir satır, protokol listesine bir değer (tek satırlık migration) ve formda o protokolün alanları demek. Telemetri, sağlık, canlı akış, olay kaydı ve panel değişmiyor.
 
 ### 2. Tek veri modeli ve iki zaman damgası
 
@@ -217,6 +224,7 @@ Yan etkisi: Connector'lar sadece bir config ve bir "sink" alıyor. Yeni bir prot
 ### 3. Yetki varsayılan olarak kapalı, rol her istekte DB'den
 
 **Ne:**
+
 - Kimlik doğrulama ve rol kontrolü global. Açık olması gereken uç noktalar (giriş, health) tek tek işaretleniyor. Yeni yazılan bir endpoint unutulsa bile korumalı doğar.
 - Rol JWT'den değil, her istekte veritabanından okunuyor.
 - Parola hash'i sorgularda hiç çekilmiyor: cevaptan silinmiyor, baştan seçilmiyor (beyaz liste).
@@ -229,9 +237,19 @@ Yan etkisi: Connector'lar sadece bir config ve bir "sink" alıyor. Yeni bir prot
 
 ## 6. Bonuslar
 
+| Case'teki bonus                          | Durum                                                   |
+| ---------------------------------------- | ------------------------------------------------------- |
+| Görüntü sınıflandırma (kamera)           | Yapılmadı (bkz. §7)                                     |
+| Üçüncü rol: Mühendis                     | Yapıldı                                                 |
+| Olay kaydı                               | Yapıldı                                                 |
+| Eşik alarmı                              | Yapıldı                                                 |
+| Verimlilik göstergesi                    | Yapılmadı (bkz. §7)                                     |
+| Bağlantı koptuğunda verinin kaybolmaması | Yapılmadı (bkz. §7); veritabanı tarafındaki zemin hazır |
+| Otomatik testler                         | Yapıldı (bkz. §1, Testler)                              |
+
 ### Mühendis rolü
 
-Üç rol var: Yönetici, Mühendis, İzleyici. Mühendis cihaz ekler, düzenler ve siler; kullanıcıları yönetemez. Yetki backend'de `@Roles` ile, arayüzde tek bir rol → izin tablosunda tanımlı. Mühendis admin sayılmadığı için son admin koruması değişmedi.
+Üç rol var: Yönetici, Mühendis, İzleyici. Mühendis cihaz ekler ve düzenler; kullanıcıları yönetemez. Cihaz silme sadece yöneticide, çünkü geri alınamaz ve cihazın okuma geçmişini de siler. Yetki backend'de `@Roles` ile, arayüzde tek bir rol → izin tablosunda tanımlı. Mühendis admin sayılmadığı için son admin koruması değişmedi.
 
 ### Olay kaydı
 
@@ -245,12 +263,29 @@ Yan etkisi: Connector'lar sadece bir config ve bir "sink" alıyor. Yeni bir prot
 
 Motor sıcaklığı 90 °C'ye ulaşınca alarm açılıyor, ancak 85 °C'ye inince kapanıyor. İki eşik olduğu için eşik etrafında dalgalanan değer alarmı açıp kapatmıyor. Eşikler `.env`'den değiştirilebiliyor ve başlangıçta doğrulanıyor. Değerlendirme backend'de yapılıyor, connector'da değil. Kartta kırmızı bir şerit çıkıyor, her alarm için tek bildirim geliyor. Alarm durumu bellekte; backend yeniden başlarsa gelen veriden yeniden hesaplanıyor.
 
+Alarm durumu, ait olduğu okumayla aynı mesajda gönderiliyor. İlk sürümde ayrı mesajlardı ve ekranda bir anlığına “tepe < anlık değer” görünüyordu.
+
 ---
 
 ## 7. Bilerek yapmadıklarım
 
-| Ne | Neden yapmadım | Yapsam nasıl yapardım |
-|---|---|---|
+İlk üç satır case'in yapılmayan bonusları, gerisi bilinçli olarak bırakılan sınırlar.
+
+| Ne                                                | Neden yapmadım                                                                                                                                                                                     | Yapsam nasıl yapardım                                                                                                                                                                                                                                                    |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Görüntü sınıflandırma (kamera)                    | En pahalı bonus. Zorunlu kapsamın tamamen çalışmasını öncelikledim.                                                                                                                                | VM'de bir servis telefon akışını okur, yüz ve göz noktalarıyla (ör. MediaPipe) normal / yorgun / kişi yok ayrımını yapar, sadece sınıf + zamanı `factory/desk1/operator` topic'ine yayınlar. Platformda yeni bir connector türü. Ham görüntü VM'den çıkmaz, kaydedilmez. |
+| Verimlilik göstergesi                             | Kapsam önceliği.                                                                                                                                                                                   | Mevcut telemetri akışı üzerine bir hesaplama (çalışma süresi oranı, fire oranı); alarm gibi canlı olay olarak yayınlanır.                                                                                                                                                |
+| Kopukken veri tamponu                             | Kapsam önceliği.                                                                                                                                                                                   | MQTT'de QoS 1 + kalıcı oturum. Zemin hazır: (device_id, ts) birincil anahtarı ve "tekrarı atla" yazımı sayesinde yeniden gönderilen veri çift kayıt oluşturmaz, `seq` boşlukları gösterir.                                                                               |
+| Platformun MQTT `status`/Last Will'i dinlemesi    | Kaynak sağlığı bağlantı + tazelikten çıkarılıyor, zorunlu kapsam için yeterli.                                                                                                                     | `status` aboneliği + bir doğrulama şeması. Böylece Bant 2 simülatörü durunca kart "Veri yok" yerine "Bağlantı yok" olurdu. Simülatör tarafı zaten hazır.                                                                                                                 |
+| Değer aralığı (akla yatkınlık) kontrolü           | Decoder yalnızca çözülemeyen değerleri (NaN, sonsuz, bilinmeyen durum kodu, negatif sayaç) reddediyor. Yanlış word sırası denemesinde 320.000 °C gibi değerlerin geçip alarm tetiklediğini gördüm. | Sinyal başına bir aralık (ör. sıcaklık −40…250 °C, akım 0…100 A). Aralık dışı değer NaN gibi bir veri hatası sayılır: örnek atılır, loglanır, bağlantı koparılmaz.                                                                                                       |
+| TimescaleDB                                       | Saatte cihaz başına ~3.600 satır; düz Postgres yeterli.                                                                                                                                            | Okuma tablosu (device_id, ts) yapısında, tek komutla hypertable'a çevrilebilir. Uzun aralıklar için downsampling.                                                                                                                                                        |
+| Backend'den makine okunur hata kodları            | Frontend şimdilik sınırlı bir iş kuralı mesajı eşlemesi yapıyor.                                                                                                                                   | Hatalarda `LAST_ADMIN` gibi sabit kodlar; çeviri tamamen frontend'de.                                                                                                                                                                                                    |
+| Parola sıfırlamada eski oturumları geçersiz kılma | Açık oturum bilgilendiriliyor ama eski token süresi dolana kadar geçerli.                                                                                                                          | Kullanıcıda token sürümü; sıfırlamada artırılır.                                                                                                                                                                                                                         |
+| Çoklu backend örneği                              | Canlı olay yolu tek süreç içinde.                                                                                                                                                                  | Redis pub/sub.                                                                                                                                                                                                                                                           |
+| Broker kimlik doğrulaması                         | Yerel demo ortamı.                                                                                                                                                                                 | Kullanıcı adı/parola ya da sertifika; bilgiler `.env`/secret'tan.                                                                                                                                                                                                        |
+| Login hız sınırı, ileri tarihli `ts` koruması     | Kapsam dışı.                                                                                                                                                                                       | Rate limiter; `ts` alış anından belirgin şekilde ilerideyse logla ve alış anını kullan.                                                                                                                                                                                  |
+
+------------------------------------------------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Görüntü sınıflandırma (kamera) | En pahalı bonus. Zorunlu kapsamın tamamen çalışmasını öncelikledim. | VM'de bir servis telefon akışını okur, yüz ve göz noktalarıyla (ör. MediaPipe) normal / yorgun / kişi yok ayrımını yapar, sadece sınıf + zamanı `factory/desk1/operator` topic'ine yayınlar. Platformda yeni bir connector türü. Ham görüntü VM'den çıkmaz. |
 | Platformun MQTT `status`/Last Will'i dinlemesi | Kaynak sağlığı bağlantı + tazelikten çıkarılıyor, zorunlu kapsam için yeterli. | `status` aboneliği + bir doğrulama şeması. Böylece Bant 2 simülatörü durunca kart "Veri yok" yerine "Bağlantı yok" olurdu. Simülatör tarafı zaten hazır. |
 | Kopukken veri tamponu | Kapsam önceliği. | MQTT'de QoS 1 + kalıcı oturum. Zemin hazır: (device_id, ts) birincil anahtarı ve "tekrarı atla" yazımı sayesinde yeniden gönderilen veri çift kayıt oluşturmaz, `seq` boşlukları gösterir. |
@@ -300,6 +335,7 @@ Bundan sonra kural koydum: veri değiştiren her doğrulama sadece izole bir ör
 - **Grafik sayfası çöküyordu:** API curl ile doğrulanmıştı ama bileşen hiç çizilmemişti. Grafiğe her render'da yeni nesne verildiği için sonsuz güncelleme döngüsü oluşuyordu.
 - **"Build temiz" ama ekran kullanılamaz:** Cihaz formu taşıyor ve ezilmişti. Ekran görüntüsüyle gösterdikten sonra araç kendi ekran görüntülerini alıp kontrol ederek düzeltti.
 - **Çıkışta yönlendirme:** Cache temizleme yöntemi ekranları bilgilendirmiyordu. Sekme ancak alakasız bir yeniden çizimde giriş ekranına geçiyordu.
+- **Word sırası yanlışsa ne görünür:** Sohbet asistanı, sıcaklığın word sırası yanlış girilirse ekranda ~0 °C görüneceğini söyledi. Bu sadece altın değer (72,5 °C, alt word'ü `0x0000`) için doğru. Canlı simülatörde denediğimde 80.005 ve 320.022 °C gibi değerler çıktı ve alarm tetiklendi: mantisin alt bitleri işaret ve üs olarak okunuyor. Değer aralığı kontrolünün eksik olduğu böyle ortaya çıktı (bkz. §7).
 - **Sohbet asistanının önerileri:**
   - TypeScript 7'de kaldırılmış bir derleyici ayarı önerdi; derleyici hatasıyla fark edildi.
   - Süreç öldürmek için önerdiği `lsof` komutu backend'le birlikte frontend sunucusunu da öldürdü ve yanlış teşhise götüren bir belirti üretti.

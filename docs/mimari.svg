@@ -1,0 +1,206 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="980" viewBox="0 0 1400 980" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#334155"/>
+    </marker>
+    <style>
+      .t  { font-size: 14px; font-weight: 700; fill: #0f172a; }
+      .s  { font-size: 12px; fill: #334155; }
+      .h  { font-size: 15px; font-weight: 700; fill: #0f172a; }
+      .hs { font-size: 12px; fill: #475569; }
+      .lbl { font-size: 11px; fill: #475569; font-style: italic; }
+      .box { fill: #ffffff; stroke: #94a3b8; stroke-width: 1.2; }
+      .line { stroke: #334155; stroke-width: 1.6; fill: none; marker-end: url(#arrow); }
+      .both { stroke: #334155; stroke-width: 1.6; fill: none; marker-end: url(#arrow); marker-start: url(#arrow); }
+      .num circle { fill: #0f172a; }
+      .num text { font-size: 12px; font-weight: 700; fill: #ffffff; text-anchor: middle; }
+    </style>
+  </defs>
+
+  <rect width="1400" height="980" fill="#ffffff"/>
+
+  <text x="20" y="38" style="font-size:22px;font-weight:700;fill:#0f172a">FactorEdge mimarisi</text>
+  <text x="20" y="58" class="hs">Oklar verinin akış yönünü gösterir.</text>
+
+  <!-- ================= VM ================= -->
+  <rect x="20" y="75" width="1010" height="190" rx="10" fill="#f3f0ff" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="525" y="99" class="h" text-anchor="middle">Sanal makine · Multipass · Ubuntu 24.04 · 192.168.252.2 · docker compose</text>
+
+  <rect x="40" y="115" width="300" height="125" rx="6" class="box"/>
+  <text x="54" y="138" class="t">line1-sim</text>
+  <text x="54" y="160" class="s">Modbus TCP sunucusu · :5020 · unit 1</text>
+  <text x="54" y="180" class="s">LinePhysics → encodeSnapshot</text>
+  <text x="54" y="200" class="s">FC04 0–19 (ölçümler) · FC03 0 (durum)</text>
+  <text x="54" y="220" class="s">FC06 ile 40001'e yazma = demo arızası</text>
+  <g class="num"><circle cx="326" cy="129" r="11"/><text x="326" y="133">2</text></g>
+
+  <rect x="360" y="115" width="290" height="125" rx="6" fill="#ffffff" stroke="#7c3aed" stroke-width="1.2" stroke-dasharray="5 4"/>
+  <text x="374" y="138" class="t">Ortak fizik modeli</text>
+  <text x="374" y="160" class="s">line-physics.ts (protokolden bağımsız)</text>
+  <text x="374" y="180" class="s">gizli yük L → üretim, sıcaklık, akım</text>
+  <text x="374" y="200" class="s">çalışıyor → durdu · %15 arıza</text>
+  <text x="374" y="220" class="s">sayaçlar volume'da kalıcı (atomik)</text>
+  <g class="num"><circle cx="636" cy="129" r="11"/><text x="636" y="133">1</text></g>
+
+  <rect x="665" y="115" width="165" height="125" rx="6" class="box"/>
+  <text x="677" y="138" class="t">line2-sim</text>
+  <text x="677" y="160" class="s">MQTT yayıncı</text>
+  <text x="677" y="180" class="s">1 mesaj/sn · QoS 1</text>
+  <text x="677" y="200" class="s">ts · seq · tüm sinyaller</text>
+  <text x="677" y="220" class="s">LWT: status=offline</text>
+  <g class="num"><circle cx="816" cy="129" r="11"/><text x="816" y="133">3</text></g>
+
+  <rect x="850" y="115" width="165" height="125" rx="6" class="box"/>
+  <text x="862" y="138" class="t">mosquitto :1883</text>
+  <text x="862" y="160" class="s">…/telemetry</text>
+  <text x="862" y="180" class="s">…/status (retained)</text>
+  <text x="862" y="200" class="s">…/command</text>
+  <text x="862" y="220" class="s">prefix: factory/line2</text>
+  <g class="num"><circle cx="1001" cy="129" r="11"/><text x="1001" y="133">3</text></g>
+
+  <path d="M360,178 L342,178" class="line"/>
+  <path d="M650,178 L663,178" class="line"/>
+  <path d="M830,178 L848,178" class="line"/>
+
+  <!-- VM -> backend -->
+  <path d="M190,240 L190,343" class="line"/>
+  <text x="198" y="285" class="lbl">Modbus TCP poll</text>
+  <text x="198" y="299" class="lbl">(backend sorar)</text>
+  <path d="M932,240 L932,343" class="line"/>
+  <text x="924" y="285" class="lbl" text-anchor="end">MQTT subscribe</text>
+  <text x="924" y="299" class="lbl" text-anchor="end">(broker iter)</text>
+
+  <!-- ================= Backend ================= -->
+  <rect x="20" y="305" width="1010" height="515" rx="10" fill="#eef5ff" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="527" y="330" class="h" text-anchor="middle">Host · NestJS 11 backend · :3000 · /api</text>
+
+  <rect x="40" y="345" width="300" height="105" rx="6" class="box"/>
+  <text x="54" y="368" class="t">ModbusConnector</text>
+  <text x="54" y="390" class="s">setTimeout zinciri: istekler üst üste binmez</text>
+  <text x="54" y="410" class="s">decoder: ABCD/CDAB · ölçek · int16</text>
+  <text x="54" y="430" class="s">hata → backoff 1·2·4·8·10 sn</text>
+  <g class="num"><circle cx="326" cy="359" r="11"/><text x="326" y="363">5</text></g>
+
+  <rect x="360" y="345" width="335" height="105" rx="6" class="box"/>
+  <text x="374" y="368" class="t">ConnectorManager</text>
+  <text x="374" y="390" class="s">istenen durum = veritabanındaki satır</text>
+  <text x="374" y="410" class="s">cihaz başına sıralı kuyruk → reconcile(id)</text>
+  <text x="374" y="430" class="s">DevicesService: DB'ye yaz → deviceSaved(id)</text>
+  <g class="num"><circle cx="681" cy="359" r="11"/><text x="681" y="363">4</text></g>
+
+  <rect x="715" y="345" width="295" height="105" rx="6" class="box"/>
+  <text x="729" y="368" class="t">MqttConnector</text>
+  <text x="729" y="390" class="s">subscribe &lt;prefix&gt;/telemetry</text>
+  <text x="729" y="410" class="s">boyut → JSON → zod; bozuk mesaj atılır</text>
+  <text x="729" y="430" class="s">mqtt.js 2 sn'de bir yeniden bağlanır</text>
+  <g class="num"><circle cx="996" cy="359" r="11"/><text x="996" y="363">5</text></g>
+
+  <path d="M360,397 L342,397" class="line"/>
+  <path d="M695,397 L713,397" class="line"/>
+  <text x="527" y="462" class="lbl" text-anchor="middle">başlatır / durdurur</text>
+
+  <path d="M190,450 L190,478" class="line"/>
+  <path d="M862,450 L862,478" class="line"/>
+
+  <rect x="40" y="480" width="970" height="52" rx="6" fill="#ffffff" stroke="#2563eb" stroke-width="1.2"/>
+  <text x="54" y="501" class="t">ManagedSink · tek veri modeli</text>
+  <text x="300" y="501" class="s">cihaz id'sini ekler · active = false iken gelen her şey atılır · protokol farkı burada biter</text>
+  <text x="54" y="521" class="s">TelemetrySample { ts, productionCount, scrapCount, motorTempC, motorCurrentA, state }  +  ConnectionEvent { connecting | connected | disconnected }</text>
+  <g class="num"><circle cx="996" cy="494" r="11"/><text x="996" y="498">6</text></g>
+
+  <path d="M190,532 L190,558" class="line"/>
+  <text x="198" y="549" class="lbl">TelemetrySample</text>
+  <path d="M527,532 L527,558" class="line"/>
+  <text x="535" y="549" class="lbl">ConnectionEvent</text>
+
+  <rect x="40" y="560" width="300" height="100" rx="6" class="box"/>
+  <text x="54" y="583" class="t">TelemetryService</text>
+  <text x="54" y="603" class="s">receivedAt = platformun alış anı</text>
+  <text x="54" y="623" class="s">son değer bellekte · alarm 90 / 85 °C</text>
+  <text x="54" y="643" class="s">önce canlı yayın, sonra DB (beklenmez)</text>
+  <g class="num"><circle cx="326" cy="574" r="11"/><text x="326" y="578">7</text></g>
+
+  <rect x="360" y="560" width="335" height="100" rx="6" class="box"/>
+  <text x="374" y="583" class="t">DeviceHealthService</text>
+  <text x="374" y="603" class="s">durum = bağlantı + tazelik (receivedAt)</text>
+  <text x="374" y="623" class="s">1 sn bekçi · eşik = beklenen aralık × 3</text>
+  <text x="374" y="643" class="s">CONNECTING · ONLINE · STALE · OFFLINE</text>
+  <g class="num"><circle cx="681" cy="574" r="11"/><text x="681" y="578">8</text></g>
+
+  <rect x="715" y="560" width="295" height="100" rx="6" class="box"/>
+  <text x="729" y="583" class="t">Olay kaydı</text>
+  <text x="729" y="603" class="s">DeviceEventRecorder olay yolunu dinler</text>
+  <text x="729" y="623" class="s">event-rules (saf) → EventsService</text>
+  <text x="729" y="643" class="s">tür + veri · user.* yalnızca ADMIN</text>
+  <g class="num"><circle cx="996" cy="574" r="11"/><text x="996" y="578">9</text></g>
+
+  <path d="M190,660 L190,688" class="line"/>
+  <path d="M527,660 L527,688" class="line"/>
+  <path d="M862,662 L862,688" class="both"/>
+
+  <rect x="40" y="690" width="970" height="52" rx="6" fill="#e0e7ff" stroke="#4f46e5" stroke-width="1.2"/>
+  <text x="54" y="711" class="t">RealtimeService → GET /api/stream (SSE)</text>
+  <text x="390" y="711" class="s">süreç içi olay yolu (RxJS Subject) · httpOnly cookie ile kimlik</text>
+  <text x="54" y="731" class="s">ilk olay snapshot, ardından telemetry · status · event · alarm · device-removed · session-* · heartbeat (5 sn)</text>
+  <g class="num"><circle cx="996" cy="704" r="11"/><text x="996" y="708">10</text></g>
+
+  <rect x="40" y="756" width="970" height="50" rx="6" fill="#ffffff" stroke="#b91c1c" stroke-width="1.2"/>
+  <text x="54" y="777" class="t">REST /api</text>
+  <text x="145" y="777" class="s">auth · devices · users · events · devices/:id/readings</text>
+  <text x="54" y="797" class="s">Global JwtAuthGuard → 401 · RolesGuard + @Roles → 403 · rol her istekte DB'den · @Public yalnızca login/logout/health</text>
+  <g class="num"><circle cx="996" cy="770" r="11"/><text x="996" y="774">11</text></g>
+
+  <!-- backend -> postgres -->
+  <path d="M527,820 L527,853" class="line"/>
+  <text x="535" y="841" class="lbl">Prisma 7</text>
+
+  <!-- ================= Postgres ================= -->
+  <rect x="20" y="855" width="1010" height="72" rx="10" fill="#fff7ed" stroke="#ea580c" stroke-width="1.5"/>
+  <text x="40" y="881" class="t">PostgreSQL 17</text>
+  <text x="165" y="881" class="s">docker · yalnızca 127.0.0.1:5432 · bilgiler .env'de (git'e girmez)</text>
+  <text x="40" y="905" class="s">devices (config jsonb, zod ile doğrulanır) · readings PK (device_id, ts), bigint sayaçlar, cascade · users (rol) · events (tür + veri, device_id SET NULL)</text>
+  <g class="num"><circle cx="1016" cy="869" r="11"/><text x="1016" y="873">12</text></g>
+
+  <!-- ================= Frontend ================= -->
+  <rect x="1080" y="305" width="300" height="515" rx="10" fill="#ecfdf5" stroke="#059669" stroke-width="1.5"/>
+  <text x="1095" y="330" class="h">Tarayıcı · React + Mantine</text>
+  <text x="1095" y="347" class="hs">:5173 · Vite proxy /api → :3000</text>
+  <g class="num"><circle cx="1366" cy="324" r="11"/><text x="1366" y="328">13</text></g>
+
+  <rect x="1095" y="360" width="270" height="95" rx="6" class="box"/>
+  <text x="1107" y="382" class="t">useLiveStream</text>
+  <text x="1107" y="402" class="s">tek EventSource /api/stream</text>
+  <text x="1107" y="420" class="s">15 sn sessizlik → kapat, yeniden aç</text>
+  <text x="1107" y="438" class="s">her bağlantıda snapshot cache'i onarır</text>
+
+  <path d="M1230,455 L1230,471" class="line"/>
+  <rect x="1095" y="473" width="270" height="62" rx="6" class="box"/>
+  <text x="1107" y="495" class="t">applyLiveEvent</text>
+  <text x="1107" y="515" class="s">olay → cache (saf reducer'lar)</text>
+
+  <path d="M1230,535 L1230,551" class="line"/>
+  <rect x="1095" y="553" width="270" height="62" rx="6" class="box"/>
+  <text x="1107" y="575" class="t">TanStack Query cache</text>
+  <text x="1107" y="595" class="s">devices · latest · readings · events</text>
+
+  <path d="M1230,615 L1230,631" class="line"/>
+  <rect x="1095" y="633" width="270" height="80" rx="6" class="box"/>
+  <text x="1107" y="655" class="t">Ekranlar (sadece cache'i okur)</text>
+  <text x="1107" y="675" class="s">Panel · Geçmiş · Cihazlar</text>
+  <text x="1107" y="695" class="s">Olaylar · Kullanıcılar</text>
+
+  <rect x="1095" y="728" width="270" height="78" rx="6" fill="#ffffff" stroke="#b91c1c" stroke-width="1.2"/>
+  <text x="1107" y="750" class="t">ROLE_PERMISSIONS · useCan</text>
+  <text x="1107" y="770" class="s">butonları ve menüyü gizler</text>
+  <text x="1107" y="788" class="s">asıl kontrol backend'de</text>
+  <g class="num"><circle cx="1351" cy="742" r="11"/><text x="1351" y="746">11</text></g>
+
+  <!-- SSE: backend -> frontend -->
+  <path d="M1010,716 L1052,716 L1052,407 L1093,407" class="line"/>
+  <text x="1068" y="600" class="lbl" text-anchor="middle" transform="rotate(-90 1068 600)">SSE (cookie)</text>
+  <!-- REST: frontend <-> backend -->
+  <path d="M1095,781 L1012,781" class="both"/>
+  <text x="1053" y="773" class="lbl" text-anchor="middle">REST</text>
+
+  <text x="20" y="960" class="hs">Bant 1 (Modbus) çekme ile, Bant 2 (MQTT) itme ile gelir; ⑥'dan sonra bütün katmanlar aynı modeli görür. Ekranlar veriyi yalnızca cache'ten okur.</text>
+</svg>
