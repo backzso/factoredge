@@ -2,6 +2,11 @@
 
 İki üretim bandını tek bir web arayüzünden izleyen ve yöneten platform. Bant 1 verisini **Modbus TCP**, Bant 2 **MQTT** ile veriyor. Veri kaynakları sanal makinede, platform (backend, veritabanı, arayüz) host bilgisayarda çalışıyor.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/panel-dark.png">
+  <img alt="Panel: Bant 1 (Modbus TCP) arızada, sıcaklık alarmı açık; Bant 2 (MQTT) durdu; altta son olaylar" src="docs/panel-light.png">
+</picture>
+
 **Durum:** Zorunlu kapsamın beş maddesi çalışıyor. Bonuslardan otomatik testler, mühendis rolü, olay kaydı ve eşik alarmı var (bkz. [Bonuslar](#6-bonuslar)). **Yapılmayan bonuslar:** görüntü sınıflandırma (kamera), verimlilik göstergesi ve bağlantı koptuğunda veri tamponu. Üçü de bilinçli olarak bırakıldı; nedenleri ve nasıl yapılacakları [Bilerek yapmadıklarım](#7-bilerek-yapmadıklarım) bölümünde.
 
 ---
