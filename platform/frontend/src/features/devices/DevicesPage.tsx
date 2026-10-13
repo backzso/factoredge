@@ -23,6 +23,7 @@ export function DevicesPage() {
   const devices = useDevices();
   const { data: latest } = useLatestReadings();
   const canManage = useCan('manageDevices');
+  const canDelete = useCan('deleteDevices');
   const templates = useTemplates();
   const remove = useDeleteDevice();
   const [params, setParams] = useSearchParams();
@@ -148,9 +149,11 @@ export function DevicesPage() {
                         <Button size="xs" variant="default" onClick={() => openEdit(device)}>
                           Düzenle
                         </Button>
-                        <Button size="xs" variant="light" color="red" onClick={() => setToDelete(device)}>
-                          Sil
-                        </Button>
+                        {canDelete && (
+                          <Button size="xs" variant="light" color="red" onClick={() => setToDelete(device)}>
+                            Sil
+                          </Button>
+                        )}
                       </Group>
                     </Table.Td>
                   )}

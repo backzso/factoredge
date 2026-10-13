@@ -6,16 +6,21 @@ const user = (role: Role): AuthUser => ({ id: role, username: role.toLowerCase()
 
 describe('can', () => {
   it.each([
-    ['ADMIN', true, true],
-    ['ENGINEER', true, false],
-    ['VIEWER', false, false],
-  ] as const)('%s: manageDevices %s, manageUsers %s', (role, devices, users) => {
-    expect(can(user(role), 'manageDevices')).toBe(devices);
-    expect(can(user(role), 'manageUsers')).toBe(users);
-  });
+    ['ADMIN', true, true, true],
+    ['ENGINEER', true, false, false],
+    ['VIEWER', false, false, false],
+  ] as const)(
+    '%s: manageDevices %s, deleteDevices %s, manageUsers %s',
+    (role, devices, deleteDevices, users) => {
+      expect(can(user(role), 'manageDevices')).toBe(devices);
+      expect(can(user(role), 'deleteDevices')).toBe(deleteDevices);
+      expect(can(user(role), 'manageUsers')).toBe(users);
+    },
+  );
 
   it('allows nothing without a user', () => {
     expect(can(null, 'manageDevices')).toBe(false);
+    expect(can(null, 'deleteDevices')).toBe(false);
     expect(can(undefined, 'manageUsers')).toBe(false);
   });
 });

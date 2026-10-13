@@ -17,7 +17,10 @@ import { type DeviceView, DevicesService } from './devices.service';
 import { CreateDeviceDto } from './dto/create-device.dto';
 import { UpdateDeviceDto } from './dto/update-device.dto';
 
-/** Reads are open to any logged-in user; writes are for ADMIN and ENGINEER. */
+/**
+ * Reads are open to any logged-in user; create and update are for ADMIN and
+ * ENGINEER, delete for ADMIN only.
+ */
 @Controller('devices')
 export class DevicesController {
   constructor(private readonly devices: DevicesService) {}
@@ -57,8 +60,9 @@ export class DevicesController {
     return this.devices.update(id, dto, actor);
   }
 
+  // ADMIN only: deleting also removes the reading history (cascade) and cannot be undone.
   @Delete(':id')
-  @Roles(Role.ADMIN, Role.ENGINEER)
+  @Roles(Role.ADMIN)
   @HttpCode(204)
   remove(
     @Param('id', ParseUUIDPipe) id: string,

@@ -96,14 +96,18 @@ export function endSession(
   queryClient.setQueryData(qk.me, null);
 }
 
-export type Permission = 'manageDevices' | 'manageUsers';
+/**
+ * manageDevices: add and edit devices. deleteDevices: delete them, which also
+ * deletes their reading history and cannot be undone.
+ */
+export type Permission = 'manageDevices' | 'deleteDevices' | 'manageUsers';
 
 /**
  * Every permission of the UI, per role. Reading (dashboard, history, devices,
  * events) needs none. Mirrors the @Roles() of the backend controllers.
  */
 export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
-  ADMIN: ['manageDevices', 'manageUsers'],
+  ADMIN: ['manageDevices', 'deleteDevices', 'manageUsers'],
   ENGINEER: ['manageDevices'],
   VIEWER: [],
 };

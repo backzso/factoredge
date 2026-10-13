@@ -138,7 +138,7 @@ describe('Devices, readings and stream (e2e)', () => {
       engineer = await loginAs('engineer', Role.ENGINEER);
     });
 
-    it('can create, update and delete devices', async () => {
+    it('can create and update devices', async () => {
       const created = await http()
         .post('/api/devices')
         .set('Cookie', engineer)
@@ -149,9 +149,28 @@ describe('Devices, readings and stream (e2e)', () => {
         .set('Cookie', engineer)
         .send({ name: 'Renamed' })
         .expect(200);
+    });
+
+    // Deleting also deletes the reading history (cascade) and cannot be undone.
+    it('gets 403 for DELETE, which only an ADMIN may do', async () => {
+      const device = await prisma.device.create({
+        data: {
+          name: 'Line 1',
+          protocol: 'MODBUS',
+          config: modbusDevice().config,
+        },
+      });
+
       await http()
-        .delete(`/api/devices/${created.body.id}`)
+        .delete(`/api/devices/${device.id}`)
         .set('Cookie', engineer)
+        .expect(403);
+      expect(await prisma.device.count()).toBe(1);
+
+      const admin = await loginAs('admin', Role.ADMIN);
+      await http()
+        .delete(`/api/devices/${device.id}`)
+        .set('Cookie', admin)
         .expect(204);
       expect(await prisma.device.count()).toBe(0);
     });
